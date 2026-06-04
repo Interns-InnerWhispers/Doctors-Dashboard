@@ -57,3 +57,56 @@ CREATE TABLE `user_sessions` (
 
 -- Re-enable foreign key checks
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- 4. Session Notes Table (Owner: BD-02)
+
+DROP TABLE IF EXISTS `session_notes`;
+CREATE TABLE `session_notes` (
+  `note_id` INT AUTO_INCREMENT,
+  `patient_id` INT NOT NULL,
+  `session_date` DATE NOT NULL,
+  `notes` TEXT,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`note_id`),
+  KEY `idx_patient_id` (`patient_id`),
+  CONSTRAINT `fk_session_notes_patient`
+    FOREIGN KEY (`patient_id`)
+    REFERENCES `patients` (`patient_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 5. Reports Table (Owner: BD-02)
+
+DROP TABLE IF EXISTS `reports`;
+CREATE TABLE `reports` (
+  `report_id` INT AUTO_INCREMENT,
+  `patient_id` INT NOT NULL,
+  `report_title` VARCHAR(255) NOT NULL,
+  `report_content` TEXT,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`report_id`),
+  KEY `idx_patient_id` (`patient_id`),
+  CONSTRAINT `fk_reports_patient`
+    FOREIGN KEY (`patient_id`)
+    REFERENCES `patients` (`patient_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- 6. Documents Table (Owner: BD-02)
+
+DROP TABLE IF EXISTS `documents`;
+CREATE TABLE `documents` (
+  `document_id` INT AUTO_INCREMENT,
+  `patient_id` INT NOT NULL,
+  `file_name` VARCHAR(255) NOT NULL,
+  `file_path` VARCHAR(500),
+  `uploaded_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`document_id`),
+  KEY `idx_patient_id` (`patient_id`),
+  CONSTRAINT `fk_documents_patient`
+    FOREIGN KEY (`patient_id`)
+    REFERENCES `patients` (`patient_id`)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
