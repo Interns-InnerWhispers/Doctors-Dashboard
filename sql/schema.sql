@@ -64,36 +64,61 @@ SET FOREIGN_KEY_CHECKS = 1;
 DROP TABLE IF EXISTS `session_notes`;
 CREATE TABLE `session_notes` (
   `note_id` INT AUTO_INCREMENT,
+  `doctor_id` INT NOT NULL,
   `patient_id` INT NOT NULL,
-  `session_date` DATE NOT NULL,
-  `notes` TEXT,
+  `concern` TEXT,
+  `observation` TEXT,
+  `intervention` TEXT,
+  `homework` TEXT,
+  `next_plan` TEXT,
+  `ai_summary` TEXT,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
   PRIMARY KEY (`note_id`),
+
+  KEY `idx_doctor_id` (`doctor_id`),
   KEY `idx_patient_id` (`patient_id`),
-  CONSTRAINT `fk_session_notes_patient`
+
+  CONSTRAINT `fk_session_doctor`
+    FOREIGN KEY (`doctor_id`)
+    REFERENCES `doctors` (`doctor_id`)
+    ON DELETE CASCADE,
+
+  CONSTRAINT `fk_session_patient`
     FOREIGN KEY (`patient_id`)
     REFERENCES `patients` (`patient_id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- 5. Reports Table (Owner: BD-02)
 
 DROP TABLE IF EXISTS `reports`;
 CREATE TABLE `reports` (
   `report_id` INT AUTO_INCREMENT,
+  `doctor_id` INT NOT NULL,
   `patient_id` INT NOT NULL,
   `report_title` VARCHAR(255) NOT NULL,
   `report_content` TEXT,
+  `ai_draft` TEXT,
+  `pdf_url` VARCHAR(500),
+  `status` VARCHAR(50) DEFAULT 'draft',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
   PRIMARY KEY (`report_id`),
+
+  KEY `idx_doctor_id` (`doctor_id`),
   KEY `idx_patient_id` (`patient_id`),
+
+  CONSTRAINT `fk_reports_doctor`
+    FOREIGN KEY (`doctor_id`)
+    REFERENCES `doctors` (`doctor_id`)
+    ON DELETE CASCADE,
+
   CONSTRAINT `fk_reports_patient`
     FOREIGN KEY (`patient_id`)
     REFERENCES `patients` (`patient_id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 
 -- 6. Documents Table (Owner: BD-02)
 
