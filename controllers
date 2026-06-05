@@ -1,10 +1,61 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const supabase = require('./config/supabase');
 const db = require('./config/db');
 
 const authController = {
   register: async (req, res) => {
-    res.status(200).json({ success: true, message: 'authController.register: skeleton endpoint' });
+    const { name, email, password, specialization, profile_image } = req.body;
+    if (!name || !email || !password || !specialization) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide name, email, password, and specialization.'
+      });
+    }
+
+    try {
+      // 1. Sign up the user in Supabase Auth
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            specialization,
+            profile_image
+          }
+        }
+      });
+
+      if (error) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+
+      if (!data.user) {
+        return res.status(400).json({ success: false, message: 'Failed to create user in authentication service.' });
+      }
+
+      // 2. Save the doctor in local MySQL database mapped to the Supabase UID
+      const [result] = await db.query(
+        'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
+        [data.user.id, name, email, specialization, profile_image || null]
+      );
+
+      res.status(201).json({
+        success: true,
+        message: 'Doctor registered successfully.',
+        user: {
+          id: result.insertId,
+          supabase_uid: data.user.id,
+          name,
+          email,
+          specialization,
+          profile_image: profile_image || null,
+          role: 'doctor'
+        }
+      });
+    } catch (error) {
+      console.error('Registration error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error during registration.' });
+    }
   },
   
   login: async (req, res) => {
@@ -14,28 +65,58 @@ const authController = {
     }
 
     try {
-      const [users] = await db.query('SELECT * FROM doctors WHERE email = ?', [email]);
-      if (!users || users.length === 0) {
-        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      // 1. Sign in with Supabase Auth
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        return res.status(401).json({ success: false, message: error.message });
       }
 
-      const user = users[0];
-      const isMatch = await bcrypt.compare(password, user.password_hash);
-      if (!isMatch) {
-        return res.status(401).json({ success: false, message: 'Invalid email or password.' });
+      if (!data.session || !data.user) {
+        return res.status(401).json({ success: false, message: 'Authentication failed: No active session.' });
       }
 
-      const token = jwt.sign(
-        { id: user.doctor_id, email: user.email, role: 'doctor' },
-        process.env.JWT_SECRET || 'fallback_secret',
-        { expiresIn: '7d' }
-      );
+      // 2. Fetch the local doctor details using supabase_uid
+      let [doctors] = await db.query('SELECT * FROM doctors WHERE supabase_uid = ?', [data.user.id]);
+      let doctor = doctors[0];
+
+      // Fallback: search by email if local record exists but doesn't have supabase_uid linked yet
+      if (!doctor) {
+        const [doctorsByEmail] = await db.query('SELECT * FROM doctors WHERE email = ?', [email]);
+        if (doctorsByEmail && doctorsByEmail.length > 0) {
+          doctor = doctorsByEmail[0];
+          await db.query('UPDATE doctors SET supabase_uid = ? WHERE doctor_id = ?', [data.user.id, doctor.doctor_id]);
+        } else {
+          // Auto-provision MySQL record if it exists in Supabase but not in MySQL
+          const name = data.user.user_metadata?.name || 'Doctor';
+          const specialization = data.user.user_metadata?.specialization || 'General Practice';
+          const profile_image = data.user.user_metadata?.profile_image || null;
+
+          const [insertResult] = await db.query(
+            'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
+            [data.user.id, name, email, specialization, profile_image]
+          );
+          const [newDoctors] = await db.query('SELECT * FROM doctors WHERE doctor_id = ?', [insertResult.insertId]);
+          doctor = newDoctors[0];
+        }
+      }
 
       res.status(200).json({
         success: true,
         message: 'Logged in successfully.',
-        token,
-        user: { id: user.doctor_id, name: user.name, email: user.email, role: 'doctor' }
+        token: data.session.access_token,
+        user: {
+          id: doctor.doctor_id,
+          supabase_uid: data.user.id,
+          name: doctor.name,
+          email: doctor.email,
+          specialization: doctor.specialization,
+          profile_image: doctor.profile_image,
+          role: 'doctor'
+        }
       });
     } catch (error) {
       console.error('Login error:', error.message);
@@ -52,7 +133,7 @@ const authController = {
 
   getProfile: async (req, res) => {
     try {
-      const [users] = await db.query('SELECT doctor_id, name, email, specialization, profile_image, created_at FROM doctors WHERE doctor_id = ?', [req.user.id]);
+      const [users] = await db.query('SELECT doctor_id, supabase_uid, name, email, specialization, profile_image, created_at FROM doctors WHERE doctor_id = ?', [req.user.id]);
       if (!users || users.length === 0) {
         return res.status(404).json({ success: false, message: 'User profile not found.' });
       }

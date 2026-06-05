@@ -50,15 +50,21 @@ DB_PASSWORD=your_password
 DB_NAME=doctors_dashboard
 DB_PORT=3306
 
-# JWT Authentication
-JWT_SECRET=your_jwt_secret_key
-JWT_EXPIRES_IN=7d
+# Supabase Authentication Configuration
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
 ```
 
 ### 3. Database Initialization
 Import the MySQL schema to initialize tables:
 ```bash
 mysql -u root -p doctors_dashboard < sql/schema.sql
+```
+
+If you are migrating an existing database, you can run the SQL schema migration directly to make the `password_hash` column nullable and add the `supabase_uid` column:
+```sql
+ALTER TABLE `doctors` ADD COLUMN `supabase_uid` VARCHAR(255) UNIQUE DEFAULT NULL AFTER `doctor_id`;
+ALTER TABLE `doctors` MODIFY COLUMN `password_hash` VARCHAR(255) DEFAULT NULL;
 ```
 
 ### 4. Running the Server
@@ -76,7 +82,8 @@ The server will run on: `http://localhost:5000`
 | Endpoint | Method | Middleware | Description |
 |---|---|---|---|
 | `/api/health` | `GET` | — | Server health indicator |
-| `/api/auth/login` | `POST` | — | Authenticate doctor & issue JWT token |
+| `/api/auth/register` | `POST` | — | Register a new doctor via Supabase & link to MySQL |
+| `/api/auth/login` | `POST` | — | Authenticate doctor via Supabase & issue access token |
 | `/api/auth/logout` | `POST` | — | Stateless logout confirmation |
 | `/api/auth/profile` | `GET` | `authMiddleware` | Fetch authenticated doctor profile |
 | `/api/patients` | `GET` | `authMiddleware` | List patient records |
