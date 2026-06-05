@@ -7,9 +7,10 @@ SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `doctors`;
 CREATE TABLE `doctors` (
   `doctor_id` INT AUTO_INCREMENT,
+  `supabase_uid` VARCHAR(255) UNIQUE DEFAULT NULL,
   `name` VARCHAR(255) NOT NULL,
   `email` VARCHAR(255) NOT NULL,
-  `password_hash` VARCHAR(255) NOT NULL,
+  `password_hash` VARCHAR(255) DEFAULT NULL,
   `specialization` VARCHAR(255) NOT NULL,
   `profile_image` VARCHAR(255) DEFAULT NULL,
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

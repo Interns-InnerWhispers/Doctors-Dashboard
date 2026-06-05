@@ -1,7 +1,8 @@
-const jwt = require('jsonwebtoken');
+const supabase = require('./config/supabase');
+const db = require('./config/db');
 
-// JWT verification middleware (BD-01)
-const authMiddleware = (req, res, next) => {
+// JWT verification middleware (BD-01) - Supabase implementation
+const authMiddleware = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
@@ -13,13 +14,54 @@ const authMiddleware = (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'fallback_secret');
-    req.user = decoded;
+    // Verify the JWT token using Supabase
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Access Denied: Invalid or expired authentication token.'
+      });
+    }
+
+    // Retrieve the doctor from local MySQL using the Supabase UUID (supabase_uid)
+    let [doctors] = await db.query('SELECT * FROM doctors WHERE supabase_uid = ?', [user.id]);
+    let doctor = doctors[0];
+
+    if (!doctor) {
+      // Fallback: search by email to link existing local account to Supabase user
+      const [doctorsByEmail] = await db.query('SELECT * FROM doctors WHERE email = ?', [user.email]);
+      if (doctorsByEmail && doctorsByEmail.length > 0) {
+        doctor = doctorsByEmail[0];
+        // Link the existing local account with the Supabase UID
+        await db.query('UPDATE doctors SET supabase_uid = ? WHERE doctor_id = ?', [user.id, doctor.doctor_id]);
+      } else {
+        // Auto-provision if the user exists in Supabase but not in our MySQL database
+        const name = user.user_metadata?.name || 'Doctor';
+        const specialization = user.user_metadata?.specialization || 'General Practice';
+        const profile_image = user.user_metadata?.profile_image || null;
+
+        const [insertResult] = await db.query(
+          'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
+          [user.id, name, user.email, specialization, profile_image]
+        );
+        const [newDoctors] = await db.query('SELECT * FROM doctors WHERE doctor_id = ?', [insertResult.insertId]);
+        doctor = newDoctors[0];
+      }
+    }
+
+    // Attach user information to request (role is hardcoded as 'doctor' for BD-01 scope)
+    req.user = {
+      id: doctor.doctor_id,
+      email: doctor.email,
+      role: 'doctor',
+      supabase_uid: user.id
+    };
     next();
   } catch (error) {
-    return res.status(403).json({
+    console.error('Authentication middleware error:', error.message);
+    return res.status(500).json({
       success: false,
-      message: 'Access Denied: Invalid or expired token.'
+      message: 'Internal server error during authentication.'
     });
   }
 };
