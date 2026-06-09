@@ -172,3 +172,298 @@ If you register a user with email confirmation enabled:
 * **Headers**:
   * **Key**: `Authorization`
   * **Value**: `Bearer <paste_your_copied_token_here>`
+
+---
+
+## 5. Complete API Reference
+
+### 5.1 Authentication Endpoints
+
+#### 5.1.1 Register a Doctor
+- **URL**: `POST /api/auth/register`
+- **Description**: Registers a new doctor account using Supabase Auth and creates a linked record in the local MySQL database.
+- **Headers**: `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "name": "Dr. Sarah Connor",
+    "email": "sarah.connor@hospital.com",
+    "password": "securepassword123",
+    "specialization": "Neurology",
+    "profile_image": "https://example.com/image.jpg"
+  }
+  ```
+- **Success Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "Doctor registered successfully.",
+    "user": {
+      "id": 1,
+      "supabase_uid": "uuid-string",
+      "name": "Dr. Sarah Connor",
+      "email": "sarah.connor@hospital.com",
+      "specialization": "Neurology",
+      "profile_image": "https://example.com/image.jpg",
+      "role": "doctor"
+    }
+  }
+  ```
+
+#### 5.1.2 Log In
+- **URL**: `POST /api/auth/login`
+- **Description**: Authenticates a doctor using their credentials and returns an access token.
+- **Headers**: `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "email": "sarah.connor@hospital.com",
+    "password": "securepassword123"
+  }
+  ```
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Logged in successfully.",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6Ikp...",
+    "user": {
+      "id": 1,
+      "supabase_uid": "uuid-string",
+      "name": "Dr. Sarah Connor",
+      "email": "sarah.connor@hospital.com",
+      "specialization": "Neurology",
+      "profile_image": null,
+      "role": "doctor"
+    }
+  }
+  ```
+
+#### 5.1.3 Log Out
+- **URL**: `POST /api/auth/logout`
+- **Description**: Stateless logout confirmation. Client should discard the authentication token.
+- **Headers**: None
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Logged out successfully. Please discard the authentication token on the client side."
+  }
+  ```
+
+#### 5.1.4 Get Profile
+- **URL**: `GET /api/auth/profile`
+- **Description**: Retrieves the profile information of the currently authenticated doctor.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "user": {
+      "doctor_id": 1,
+      "supabase_uid": "uuid-string",
+      "name": "Dr. Sarah Connor",
+      "email": "sarah.connor@hospital.com",
+      "specialization": "Neurology",
+      "profile_image": null,
+      "created_at": "2024-06-09T10:00:00.000Z"
+    }
+  }
+  ```
+
+---
+
+### 5.2 Doctors Endpoints
+
+#### 5.2.1 Get All Doctors
+- **URL**: `GET /api/doctors`
+- **Description**: Retrieves a list of all registered doctors.
+- **Headers**: None required.
+- **Query Parameters**:
+  - `specialty` (Optional): Filter doctors by a specific medical specialization.
+    - *Example*: `?specialty=Neurology`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "doctors": [
+      {
+        "doctor_id": 1,
+        "name": "Dr. Sarah Connor",
+        "email": "sarah.connor@hospital.com",
+        "specialization": "Neurology",
+        "profile_image": null,
+        "created_at": "2024-06-09T10:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+#### 5.2.2 Get Doctor by ID
+- **URL**: `GET /api/doctors/:id`
+- **Description**: Retrieves a single doctor's profile by their local `doctor_id`.
+- **Headers**: None required.
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "doctor": {
+      "doctor_id": 1,
+      "name": "Dr. Sarah Connor",
+      "email": "sarah.connor@hospital.com",
+      "specialization": "Neurology",
+      "profile_image": null,
+      "created_at": "2024-06-09T10:00:00.000Z"
+    }
+  }
+  ```
+
+#### 5.2.3 Update Doctor Profile
+- **URL**: `PUT /api/doctors/profile`
+- **Description**: Updates the authenticated doctor's profile details.
+- **Headers**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "name": "Dr. Sarah J. Connor",
+    "specialization": "Pediatric Neurology",
+    "profile_image": "https://example.com/new_image.jpg"
+  }
+  ```
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Doctor profile updated successfully."
+  }
+  ```
+
+---
+
+### 5.3 Patients Endpoints
+
+#### 5.3.1 Get All Patients
+- **URL**: `GET /api/patients`
+- **Description**: Retrieves a list of all patients.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "patients": [
+      {
+        "patient_id": 1,
+        "doctor_id": 1,
+        "name": "John Doe",
+        "dob": "1990-01-01T00:00:00.000Z",
+        "gender": "Male",
+        "phone": "555-1234",
+        "email": "john.doe@example.com",
+        "diagnosis": "Mild Hypertension",
+        "status": "Active",
+        "created_at": "2024-06-09T12:00:00.000Z"
+      }
+    ]
+  }
+  ```
+
+#### 5.3.2 Get Patient by ID
+- **URL**: `GET /api/patients/:id`
+- **Description**: Retrieves a single patient's profile by their `patient_id`.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "patient": {
+      "patient_id": 1,
+      "doctor_id": 1,
+      "name": "John Doe",
+      "dob": "1990-01-01T00:00:00.000Z",
+      "gender": "Male",
+      "phone": "555-1234",
+      "email": "john.doe@example.com",
+      "diagnosis": "Mild Hypertension",
+      "status": "Active",
+      "created_at": "2024-06-09T12:00:00.000Z"
+    }
+  }
+  ```
+
+#### 5.3.3 Upsert Patient Profile
+- **URL**: `PUT /api/patients/profile`
+- **Description**: Creates a new patient or updates an existing patient linked to the authenticated doctor. If `patient_id` is provided, it performs an update; otherwise, it creates a new record.
+- **Headers**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "patient_id": 1, 
+    "name": "John Doe",
+    "dob": "1990-01-01",
+    "gender": "Male",
+    "phone": "555-1234",
+    "email": "john.doe@example.com",
+    "diagnosis": "Mild Hypertension",
+    "status": "Active"
+  }
+  ```
+  *(Omit `"patient_id"` if creating a new patient).*
+- **Success Response** (`200 OK` on Update, `201 Created` on Create):
+  ```json
+  {
+    "success": true,
+    "message": "Patient profile updated successfully."
+  }
+  ```
+
+---
+
+### 5.4 Appointments Endpoints
+
+#### 5.4.1 Get Appointments (List with Filters)
+- **URL**: `GET /api/appointments`
+- **Description**: Retrieves a list of appointments belonging to the currently authenticated doctor. Supports dynamic filtering via query parameters.
+- **Headers**: `Authorization: Bearer <token>`
+- **Query Parameters** (Optional):
+  - `patient_id`: Filter appointments for a specific patient.
+    - *Example*: `?patient_id=3`
+  - `date`: Filter appointments matching a specific date (YYYY-MM-DD).
+    - *Example*: `?date=2024-06-10`
+  - `status`: Filter appointments by their status.
+    - *Example*: `?status=scheduled`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "appointments": [
+      {
+        "appt_id": 1,
+        "doctor_id": 14,
+        "patient_id": 3,
+        "date": "2024-06-10T00:00:00.000Z",
+        "time": "09:00:00",
+        "type": "Checkup",
+        "status": "scheduled",
+        "notes": "Regular checkup",
+        "created_at": "2024-06-09T18:30:00.000Z"
+      }
+    ]
+  }
+  ```
+
+---
+
+### Error Handling
+
+All endpoints follow this standardized error response structure for failures, such as `400 Bad Request`, `401 Unauthorized`, `404 Not Found`, or `500 Internal Server Error`:
+
+```json
+{
+  "success": false,
+  "message": "A descriptive error message explaining what went wrong."
+}
+```

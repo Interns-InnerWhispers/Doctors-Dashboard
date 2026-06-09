@@ -136,3 +136,24 @@ CREATE TABLE `documents` (
     REFERENCES `patients` (`patient_id`)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 7. Appointments Table (Owner: BD-01)
+DROP TABLE IF EXISTS `appointments`;
+CREATE TABLE `appointments` (
+  `appt_id` INT AUTO_INCREMENT,
+  `doctor_id` INT NOT NULL,
+  `patient_id` INT NOT NULL,
+  `date` DATE NOT NULL,
+  `time` TIME NOT NULL,
+  `type` VARCHAR(100) DEFAULT NULL,
+  `status` VARCHAR(50) DEFAULT 'scheduled',
+  `notes` TEXT,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`appt_id`),
+  KEY `idx_doctor_id` (`doctor_id`),
+  KEY `idx_patient_id` (`patient_id`),
+  KEY `idx_date` (`date`),
+  KEY `idx_status` (`status`),
+  CONSTRAINT `fk_appointments_doctor` FOREIGN KEY (`doctor_id`) REFERENCES `doctors` (`doctor_id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_appointments_patient` FOREIGN KEY (`patient_id`) REFERENCES `patients` (`patient_id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

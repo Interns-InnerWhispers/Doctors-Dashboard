@@ -24,6 +24,7 @@ The database schema defines the three tables belonging to the **BD-01** role:
 1. **`doctors`**: Main dashboard users. Holds profile details, specialty, and login credentials.
 2. **`patients`**: Patient health profiles tracked by assigned doctors.
 3. **`user_sessions`**: Session-tracking store for doctor login sessions.
+4. **`appointments`**: Manages patient appointments with dynamic scheduling and status tracking.
 
 See [schema.sql](file:///d:/Projects/Doctors-Dashboard/sql/schema.sql) for full definitions, constraints, and index details.
 
@@ -89,3 +90,4 @@ The server will run on: `http://localhost:5000`
 | `/api/patients` | `GET` | `authMiddleware` | List patient records |
 | `/api/patients/:id` | `GET` | `authMiddleware` | Retrieve details for a specific patient |
 | `/api/patients/profile`| `PUT` | `authMiddleware` | Create or update a patient profile |
+| `/api/appointments` | `GET` | `authMiddleware` | List and dynamically filter appointments (by date, status, patient) |

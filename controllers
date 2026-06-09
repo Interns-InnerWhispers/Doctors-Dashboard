@@ -242,8 +242,44 @@ const patientController = {
   }
 };
 
+const appointmentController = {
+  getAppointments: async (req, res) => {
+    const doctorId = req.user.id;
+    const { patient_id, date, status } = req.query;
+
+    try {
+      let query = 'SELECT appt_id, doctor_id, patient_id, date, time, type, status, notes, created_at FROM appointments WHERE doctor_id = ?';
+      const params = [doctorId];
+
+      if (patient_id) {
+        query += ' AND patient_id = ?';
+        params.push(patient_id);
+      }
+      
+      if (date) {
+        query += ' AND date = ?';
+        params.push(date);
+      }
+
+      if (status) {
+        query += ' AND status = ?';
+        params.push(status);
+      }
+      
+      query += ' ORDER BY date DESC, time DESC';
+
+      const [appointments] = await db.query(query, params);
+      res.status(200).json({ success: true, appointments });
+    } catch (error) {
+      console.error('Get appointments error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error retrieving appointments.' });
+    }
+  }
+};
+
 module.exports = {
   authController,
   doctorController,
-  patientController
+  patientController,
+  appointmentController
 };
