@@ -6,4 +6,7 @@ const { appointmentController } = require('../controllers');
 // GET /api/appointments - list with filters
 router.get('/', middleware.authMiddleware, appointmentController.getAppointments);
 
+// POST /api/appointments - create appointment
+router.post('/', middleware.authMiddleware, appointmentController.createAppointment);
+
 module.exports = router;

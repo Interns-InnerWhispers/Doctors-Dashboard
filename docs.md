@@ -424,7 +424,44 @@ If you register a user with email confirmation enabled:
 
 ### 5.4 Appointments Endpoints
 
-#### 5.4.1 Get Appointments (List with Filters)
+#### 5.4.1 Create an Appointment
+- **URL**: `POST /api/appointments`
+- **Description**: Creates a new appointment linked to the authenticated doctor and a specific patient.
+- **Headers**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "patient_id": 3,
+    "date": "2024-06-15",
+    "time": "14:30:00",
+    "type": "Consultation",
+    "status": "scheduled",
+    "notes": "Patient experiencing mild headaches."
+  }
+  ```
+  *(Note: `type`, `status`, and `notes` are optional).*
+- **Success Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "Appointment created successfully.",
+    "appointment": {
+      "appt_id": 2,
+      "doctor_id": 14,
+      "patient_id": 3,
+      "date": "2024-06-15T00:00:00.000Z",
+      "time": "14:30:00",
+      "type": "Consultation",
+      "status": "scheduled",
+      "notes": "Patient experiencing mild headaches.",
+      "created_at": "2024-06-09T19:00:00.000Z"
+    }
+  }
+  ```
+
+#### 5.4.2 Get Appointments (List with Filters)
 - **URL**: `GET /api/appointments`
 - **Description**: Retrieves a list of appointments belonging to the currently authenticated doctor. Supports dynamic filtering via query parameters.
 - **Headers**: `Authorization: Bearer <token>`
