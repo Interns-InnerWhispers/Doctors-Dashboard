@@ -242,20 +242,23 @@ const patientController = {
   }
 };
 
+
 const appointmentController = {
   getAppointments: async (req, res) => {
     const doctorId = req.user.id;
     const { patient_id, date, status } = req.query;
 
     try {
-      let query = 'SELECT appt_id, doctor_id, patient_id, date, time, type, status, notes, created_at FROM appointments WHERE doctor_id = ?';
+      let query =
+        'SELECT appt_id, doctor_id, patient_id, date, time, type, status, notes, created_at FROM appointments WHERE doctor_id = ?';
+
       const params = [doctorId];
 
       if (patient_id) {
         query += ' AND patient_id = ?';
         params.push(patient_id);
       }
-      
+
       if (date) {
         query += ' AND date = ?';
         params.push(date);
@@ -265,14 +268,21 @@ const appointmentController = {
         query += ' AND status = ?';
         params.push(status);
       }
-      
+
       query += ' ORDER BY date DESC, time DESC';
 
       const [appointments] = await db.query(query, params);
-      res.status(200).json({ success: true, appointments });
+
+      res.status(200).json({
+        success: true,
+        appointments
+      });
     } catch (error) {
       console.error('Get appointments error:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error retrieving appointments.' });
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error retrieving appointments.'
+      });
     }
   },
   
@@ -305,9 +315,78 @@ const appointmentController = {
   }
 };
 
+const sessionController = {
+  getSessions: async (req, res) => {
+    res.status(200).json({ message: "Get all sessions" });
+  },
+
+  getSessionById: async (req, res) => {
+    res.status(200).json({ message: "Get session by ID" });
+  },
+
+  createSession: async (req, res) => {
+    res.status(201).json({ message: "Create session" });
+  },
+
+  updateSession: async (req, res) => {
+    res.status(200).json({ message: "Update session" });
+  },
+
+  deleteSession: async (req, res) => {
+    res.status(200).json({ message: "Delete session" });
+  }
+};
+
+const reportController = {
+  getReports: async (req, res) => {
+    res.status(200).json({ message: "Get all reports" });
+  },
+
+  getReportById: async (req, res) => {
+    res.status(200).json({ message: "Get report by ID" });
+  },
+
+  createReport: async (req, res) => {
+    res.status(201).json({ message: "Create report" });
+  },
+
+  updateReport: async (req, res) => {
+    res.status(200).json({ message: "Update report" });
+  },
+
+  deleteReport: async (req, res) => {
+    res.status(200).json({ message: "Delete report" });
+  }
+};
+
+const documentController = {
+  getDocuments: async (req, res) => {
+    res.status(200).json({ message: "Get all documents" });
+  },
+
+  getDocumentById: async (req, res) => {
+    res.status(200).json({ message: "Get document by ID" });
+  },
+
+  uploadDocument: async (req, res) => {
+    res.status(201).json({ message: "Upload document" });
+  },
+
+  updateDocument: async (req, res) => {
+    res.status(200).json({ message: "Update document" });
+  },
+
+  deleteDocument: async (req, res) => {
+    res.status(200).json({ message: "Delete document" });
+  }
+};
+
 module.exports = {
   authController,
   doctorController,
   patientController,
-  appointmentController
+  appointmentController,
+  sessionController,
+  reportController,
+  documentController
 };
