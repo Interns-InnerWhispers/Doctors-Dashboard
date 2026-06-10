@@ -26,6 +26,10 @@ const authRoutes = require('./routes/authRoutes');
 const doctorRoutes = require('./routes/doctorRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
+// BD-02 Routes
+const sessionRoutes = require('./routes/sessionRoutes');
+const reportRoutes = require('./routes/reportRoutes');
+const documentRoutes = require('./routes/documentRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,6 +62,10 @@ app.use('/api/auth', authRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
+// BD-02 API Routes
+app.use('/api/sessions', sessionRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/documents', documentRoutes);
 
 app.use((req, res, next) => {
   res.status(404).json({

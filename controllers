@@ -315,27 +315,163 @@ const appointmentController = {
   }
 };
 
+
+// =========================
+// BD-02 Session Management
+// =========================
+
+
 const sessionController = {
   getSessions: async (req, res) => {
-    res.status(200).json({ message: "Get all sessions" });
+    try {
+      const [sessions] = await db.query(
+        "SELECT * FROM session_notes"
+      );
+
+      res.status(200).json({
+        success: true,
+        sessions
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
   },
 
   getSessionById: async (req, res) => {
-    res.status(200).json({ message: "Get session by ID" });
+    try {
+      const [sessions] = await db.query(
+        "SELECT * FROM session_notes WHERE note_id = ?",
+        [req.params.id]
+      );
+
+      res.status(200).json({
+        success: true,
+        session: sessions[0]
+      });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
   },
 
   createSession: async (req, res) => {
-    res.status(201).json({ message: "Create session" });
+    try {
+      const {
+        doctor_id,
+        patient_id,
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary
+      } = req.body;
+
+      const [result] = await db.query(
+        `INSERT INTO session_notes
+        (doctor_id, patient_id, concern, observation,
+         intervention, homework, next_plan, ai_summary)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          doctor_id,
+          patient_id,
+          concern,
+          observation,
+          intervention,
+          homework,
+          next_plan,
+          ai_summary
+        ]
+      );
+
+      res.status(201).json({
+        success: true,
+        sessionId: result.insertId
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
   },
 
   updateSession: async (req, res) => {
-    res.status(200).json({ message: "Update session" });
+    try {
+
+      const {
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary
+      } = req.body;
+
+      await db.query(
+        `UPDATE session_notes
+         SET concern=?,
+             observation=?,
+             intervention=?,
+             homework=?,
+             next_plan=?,
+             ai_summary=?
+         WHERE note_id=?`,
+        [
+          concern,
+          observation,
+          intervention,
+          homework,
+          next_plan,
+          ai_summary,
+          req.params.id
+        ]
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Session updated"
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
   },
 
   deleteSession: async (req, res) => {
-    res.status(200).json({ message: "Delete session" });
+    try {
+
+      await db.query(
+        "DELETE FROM session_notes WHERE note_id=?",
+        [req.params.id]
+      );
+
+      res.status(200).json({
+        success: true,
+        message: "Session deleted"
+      });
+
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+    }
   }
 };
+
+// =========================
+// BD-02 Report Management
+// =========================
 
 const reportController = {
   getReports: async (req, res) => {
@@ -358,6 +494,10 @@ const reportController = {
     res.status(200).json({ message: "Delete report" });
   }
 };
+
+// =========================
+// BD-02 Document Management
+// =========================
 
 const documentController = {
   getDocuments: async (req, res) => {

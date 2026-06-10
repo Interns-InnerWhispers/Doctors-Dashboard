@@ -1,19 +1,18 @@
+// BD-02 Session Notes CRUD Routes
+
 const express = require("express");
 const router = express.Router();
 
-// GET all session notes
-router.get("/");
+const { sessionController } = require("../controllers");
 
-// GET session note by ID
-router.get("/:id");
+router.get("/", sessionController.getSessions);
 
-// CREATE session note
-router.post("/");
+router.get("/:id", sessionController.getSessionById);
 
-// UPDATE session note
-router.put("/:id");
+router.post("/", sessionController.createSession);
 
-// DELETE session note
-router.delete("/:id");
+router.put("/:id", sessionController.updateSession);
+
+router.delete("/:id", sessionController.deleteSession);
 
 module.exports = router;
