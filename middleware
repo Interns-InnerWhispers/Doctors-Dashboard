@@ -1,5 +1,4 @@
-const supabase = require('./config/supabase');
-const db = require('./config/db');
+const { supabaseAdmin, createSupabaseClient } = require('./config/supabase');
 
 // JWT verification middleware (BD-01) - Supabase implementation
 const authMiddleware = async (req, res, next) => {
@@ -14,8 +13,8 @@ const authMiddleware = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    // Verify the JWT token using Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    // 1. Verify the JWT token using Supabase Admin
+    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
     if (error || !user) {
       return res.status(401).json({
         success: false,
@@ -23,28 +22,51 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Retrieve the doctor from local MySQL using the Supabase UUID (supabase_uid)
-    let [doctors] = await db.query('SELECT * FROM doctors WHERE supabase_uid = ?', [user.id]);
-    let doctor = doctors[0];
+    // 2. Initialize the secure RLS-enforced client and attach to request
+    req.supabase = createSupabaseClient(token);
+
+    // 3. Retrieve the doctor from Supabase `doctors` table using the Supabase UUID (supabase_uid)
+    let { data: doctors, error: fetchError } = await supabaseAdmin
+      .from('doctors')
+      .select('*')
+      .eq('supabase_uid', user.id);
+
+    let doctor = doctors && doctors.length > 0 ? doctors[0] : null;
 
     if (!doctor) {
       // Fallback: search by email to link existing local account to Supabase user
-      const [doctorsByEmail] = await db.query('SELECT * FROM doctors WHERE email = ?', [user.email]);
+      let { data: doctorsByEmail } = await supabaseAdmin
+        .from('doctors')
+        .select('*')
+        .eq('email', user.email);
+
       if (doctorsByEmail && doctorsByEmail.length > 0) {
         doctor = doctorsByEmail[0];
         // Link the existing local account with the Supabase UID
-        await db.query('UPDATE doctors SET supabase_uid = ? WHERE doctor_id = ?', [user.id, doctor.doctor_id]);
+        await supabaseAdmin
+          .from('doctors')
+          .update({ supabase_uid: user.id })
+          .eq('doctor_id', doctor.doctor_id);
       } else {
-        // Auto-provision if the user exists in Supabase but not in our MySQL database
+        // Auto-provision if the user exists in Supabase Auth but not in our doctors table
         const name = user.user_metadata?.name || 'Doctor';
         const specialization = user.user_metadata?.specialization || 'General Practice';
         const profile_image = user.user_metadata?.profile_image || null;
 
-        const [insertResult] = await db.query(
-          'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
-          [user.id, name, user.email, specialization, profile_image]
-        );
-        const [newDoctors] = await db.query('SELECT * FROM doctors WHERE doctor_id = ?', [insertResult.insertId]);
+        const { data: newDoctors, error: insertError } = await supabaseAdmin
+          .from('doctors')
+          .insert([
+            {
+              supabase_uid: user.id,
+              name,
+              email: user.email,
+              specialization,
+              profile_image
+            }
+          ])
+          .select();
+          
+        if (insertError) throw insertError;
         doctor = newDoctors[0];
       }
     }
@@ -56,6 +78,7 @@ const authMiddleware = async (req, res, next) => {
       role: 'doctor',
       supabase_uid: user.id
     };
+    
     next();
   } catch (error) {
     console.error('Authentication middleware error:', error.message);

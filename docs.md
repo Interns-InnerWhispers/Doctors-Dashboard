@@ -1,31 +1,28 @@
-# Technical Documentation: Supabase Authentication Integration
+# Technical Documentation: Supabase Backend Migration
 
-This document outlines the architecture, implementation details, and step-by-step integration of **Supabase Authentication** into the Doctors-Dashboard backend (BD-01 scope).
+This document outlines the architecture, implementation details, and step-by-step integration of the full **Supabase** migration for the Doctors-Dashboard backend.
 
 ---
 
 ## 1. Objective & Design Decisions
 
 ### The Goal
-Transition the existing session-less JWT authentication system to a secure, cloud-based Identity and Access Management (IAM) provider using **Supabase Auth**.
+Transition the backend from a local MySQL database with custom session authentication to a fully managed cloud backend using **Supabase** for both Identity and Access Management (Auth) and PostgreSQL database storage.
 
 ### Why Supabase?
-1. **Security**: We delegate sensitive operations like password hashing, multi-factor authentication (MFA) potential, and session management to Supabase, eliminating the need to store raw hashes locally.
-2. **Standard Compliance**: Supabase issues industry-standard JWTs (JSON Web Tokens) signed via standard algorithms, simplifying integration with other services.
-3. **Low Friction**: We can retain all existing doctor/patient relationships in our local MySQL database while using Supabase for identity management.
+1. **Security & Auth**: We delegate sensitive operations like password hashing and session management to Supabase. It issues industry-standard JWTs for secure integration.
+2. **PostgreSQL Power**: Supabase provides a powerful Postgres database with Row Level Security (RLS) built-in, securing patient data at the database level.
+3. **Streamlined SDK**: Replaced raw SQL queries and connection pools with the highly readable `@supabase/supabase-js` query builder.
 
 ### Architectural Decisions
-* **Hybrid User Model**: 
-  - Supabase handles credentials, authentication sessions, and issues JWT access tokens.
-  - The local MySQL database continues to store doctor-specific metadata (specializations, profile pictures, and relationships to patients).
-  - The two schemas are linked using the Supabase UUID as a foreign reference (`supabase_uid`) in our local MySQL `doctors` table.
+* **Full Backend Migration**: 
+  - The local MySQL database and `mysql2` dependencies have been completely removed.
+  - All entities (doctors, patients, appointments, sessions) now reside in Supabase PostgreSQL.
+* **Dual Client Strategy**:
+  - `supabaseAdmin` (Service Role): Used exclusively for privileged operations like auto-provisioning a doctor record directly after they sign up via Auth. Bypasses RLS.
+  - `req.supabase` (JWT-scoped Client): Attached to authenticated requests via `authMiddleware`. All standard CRUD operations use this client to ensure Row Level Security (RLS) policies are automatically enforced per user.
 * **Backward Compatibility**:
-  - The downstream code in other endpoints (such as patient registration, doctor list fetching, and appointments) relies heavily on `req.user.id` being the local auto-incremented integer `doctor_id`.
-  - Instead of rewriting all controllers to use string UUIDs, the `authMiddleware` resolves the Supabase UUID to the local integer ID and attaches it to `req.user.id`. The rest of the app is completely unaffected.
-* **Auto-Provisioning**:
-  - If a user signs up on a separate frontend or client directly with Supabase, the middleware auto-provisions a matching record in our MySQL `doctors` table during their first request.
-* **Auto-Linking**:
-  - If a doctor already exists in our MySQL database (registered locally in the past) and subsequently signs up with the same email on Supabase, the system automatically links their Supabase UUID to their existing MySQL record upon their first authenticated request or login.
+  - API endpoint paths and JSON payload structures were preserved to ensure frontend clients do not break.
 
 ---
 
@@ -33,6 +30,7 @@ Transition the existing session-less JWT authentication system to a secure, clou
 
 ### 2.1 Dependencies
 * Installed `@supabase/supabase-js` to configure the backend Supabase SDK client.
+* Uninstalled `mysql2`.
 
 ### 2.2 Configuration Files
 #### [config/supabase.js](file:///d:/Projects/Doctors-Dashboard/config/supabase.js) [NEW]
@@ -66,54 +64,32 @@ SUPABASE_ANON_KEY=<your-anon-public-key>
 ---
 
 ### 2.3 Database Layer
-#### [sql/schema.sql](file:///d:/Projects/Doctors-Dashboard/sql/schema.sql) [MODIFY]
-Modified the `doctors` table schema:
-1. **Added `supabase_uid`** (`VARCHAR(255) UNIQUE DEFAULT NULL`) to map to the Supabase Auth system.
-2. **Altered `password_hash`** to be nullable (`DEFAULT NULL`) since passwords are now handled on Supabase servers.
-
-```sql
-CREATE TABLE `doctors` (
-  `doctor_id` INT AUTO_INCREMENT,
-  `supabase_uid` VARCHAR(255) UNIQUE DEFAULT NULL,
-  `name` VARCHAR(255) NOT NULL,
-  `email` VARCHAR(255) NOT NULL,
-  `password_hash` VARCHAR(255) DEFAULT NULL,
-  `specialization` VARCHAR(255) NOT NULL,
-  `profile_image` VARCHAR(255) DEFAULT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`doctor_id`),
-  UNIQUE KEY `idx_email` (`email`),
-  KEY `idx_specialization` (`specialization`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-```
+* **Removed Local Database**: The `config/db.js` file and `sql/schema.sql` file were deleted.
+* **Supabase PostgreSQL**: Tables, foreign keys, and RLS policies are now managed exclusively via the Supabase dashboard.
 
 ---
 
 ### 2.4 Middleware
 #### [middleware](file:///d:/Projects/Doctors-Dashboard/middleware) [MODIFY]
-Rewrote `authMiddleware` to handle Supabase JWT validation and MySQL synchronization:
+Rewrote `authMiddleware` to handle Supabase JWT validation and initialization of RLS scoped clients:
 * Reads `Authorization: Bearer <TOKEN>` header.
-* Calls `supabase.auth.getUser(token)` to verify the token.
-* Retrieves user by `supabase_uid` in MySQL.
-* Performs **Auto-Linking** (using email fallback) or **Auto-Provisioning** (creating MySQL record if missing).
+* Calls `supabaseAdmin.auth.getUser(token)` to verify the token.
+* Retrieves user from the `doctors` table in Supabase.
 * Sets `req.user = { id: doctor.doctor_id, email: doctor.email, role: 'doctor', supabase_uid: user.id }`.
+* **Most Importantly**: Attaches an RLS-enforced Supabase client instance to `req.supabase` that uses the user's JWT.
 
 ---
 
 ### 2.5 Controllers
 #### [controllers](file:///d:/Projects/Doctors-Dashboard/controllers) [MODIFY]
-* **`register`**: 
-  - Signs up the doctor in Supabase using email, password, and custom metadata:
-    ```javascript
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { name, specialization, profile_image } } });
-    ```
-  - Inserts user to local MySQL `doctors` database containing `data.user.id` (Supabase UUID).
-* **`login`**: 
-  - Authenticates with Supabase using `supabase.auth.signInWithPassword({ email, password })`.
-  - Verifies local user exists and links/provisions them.
-  - Returns `data.session.access_token` and the local profile.
-* **`getProfile`**: 
-  - Retrieves profile information, including `supabase_uid`, from local MySQL database using the authenticated local `doctor_id`.
+* **`authController`**: 
+  - Signs up the doctor in Supabase Auth.
+  - Inserts the new profile into the `doctors` table using the `supabaseAdmin` service role client to bypass RLS during registration.
+  - Authenticates with Supabase using `signInWithPassword`.
+* **CRUD Controllers (`doctorController`, `patientController`, `appointmentController`, `sessionController`)**:
+  - Replaced all raw MySQL queries with Supabase Javascript query builders (`.from()`, `.select()`, `.insert()`, `.update()`).
+  - Utilized `req.supabase` to ensure all queries are bound to the authenticated user's RLS policies.
+  - Fallbacks to an anonymous client (`createSupabaseClient()`) for unprotected public routes (e.g., getting public doctor directories).
 
 ---
 

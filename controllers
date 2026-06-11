@@ -1,5 +1,4 @@
-const supabase = require('./config/supabase');
-const db = require('./config/db');
+const { supabaseAdmin, createSupabaseClient } = require('./config/supabase');
 
 const authController = {
   register: async (req, res) => {
@@ -13,7 +12,7 @@ const authController = {
 
     try {
       // 1. Sign up the user in Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
+      const { data, error } = await supabaseAdmin.auth.signUp({
         email,
         password,
         options: {
@@ -33,17 +32,26 @@ const authController = {
         return res.status(400).json({ success: false, message: 'Failed to create user in authentication service.' });
       }
 
-      // 2. Save the doctor in local MySQL database mapped to the Supabase UID
-      const [result] = await db.query(
-        'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
-        [data.user.id, name, email, specialization, profile_image || null]
-      );
+      // 2. Save the doctor in Supabase public.doctors table mapped to the Supabase UID
+      const { data: newDoctor, error: insertError } = await supabaseAdmin
+        .from('doctors')
+        .insert([{
+          supabase_uid: data.user.id,
+          name,
+          email,
+          specialization,
+          profile_image: profile_image || null
+        }])
+        .select();
+
+      if (insertError) throw insertError;
+      const result = newDoctor[0];
 
       res.status(201).json({
         success: true,
         message: 'Doctor registered successfully.',
         user: {
-          id: result.insertId,
+          id: result.doctor_id,
           supabase_uid: data.user.id,
           name,
           email,
@@ -66,7 +74,7 @@ const authController = {
 
     try {
       // 1. Sign in with Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
         email,
         password
       });
@@ -80,26 +88,44 @@ const authController = {
       }
 
       // 2. Fetch the local doctor details using supabase_uid
-      let [doctors] = await db.query('SELECT * FROM doctors WHERE supabase_uid = ?', [data.user.id]);
-      let doctor = doctors[0];
+      let { data: doctors, error: fetchError } = await supabaseAdmin
+        .from('doctors')
+        .select('*')
+        .eq('supabase_uid', data.user.id);
+        
+      let doctor = doctors && doctors.length > 0 ? doctors[0] : null;
 
       // Fallback: search by email if local record exists but doesn't have supabase_uid linked yet
       if (!doctor) {
-        const [doctorsByEmail] = await db.query('SELECT * FROM doctors WHERE email = ?', [email]);
+        let { data: doctorsByEmail } = await supabaseAdmin
+          .from('doctors')
+          .select('*')
+          .eq('email', email);
+          
         if (doctorsByEmail && doctorsByEmail.length > 0) {
           doctor = doctorsByEmail[0];
-          await db.query('UPDATE doctors SET supabase_uid = ? WHERE doctor_id = ?', [data.user.id, doctor.doctor_id]);
+          await supabaseAdmin
+            .from('doctors')
+            .update({ supabase_uid: data.user.id })
+            .eq('doctor_id', doctor.doctor_id);
         } else {
-          // Auto-provision MySQL record if it exists in Supabase but not in MySQL
+          // Auto-provision Postgres record if it exists in Supabase Auth but not in public.doctors
           const name = data.user.user_metadata?.name || 'Doctor';
           const specialization = data.user.user_metadata?.specialization || 'General Practice';
           const profile_image = data.user.user_metadata?.profile_image || null;
 
-          const [insertResult] = await db.query(
-            'INSERT INTO doctors (supabase_uid, name, email, specialization, profile_image) VALUES (?, ?, ?, ?, ?)',
-            [data.user.id, name, email, specialization, profile_image]
-          );
-          const [newDoctors] = await db.query('SELECT * FROM doctors WHERE doctor_id = ?', [insertResult.insertId]);
+          const { data: newDoctors, error: insertError } = await supabaseAdmin
+            .from('doctors')
+            .insert([{
+              supabase_uid: data.user.id,
+              name,
+              email,
+              specialization,
+              profile_image
+            }])
+            .select();
+            
+          if (insertError) throw insertError;
           doctor = newDoctors[0];
         }
       }
@@ -133,7 +159,13 @@ const authController = {
 
   getProfile: async (req, res) => {
     try {
-      const [users] = await db.query('SELECT doctor_id, supabase_uid, name, email, specialization, profile_image, created_at FROM doctors WHERE doctor_id = ?', [req.user.id]);
+      const { data: users, error } = await req.supabase
+        .from('doctors')
+        .select('doctor_id, supabase_uid, name, email, specialization, profile_image, created_at')
+        .eq('doctor_id', req.user.id);
+        
+      if (error) throw error;
+      
       if (!users || users.length === 0) {
         return res.status(404).json({ success: false, message: 'User profile not found.' });
       }
@@ -149,24 +181,36 @@ const doctorController = {
   getDoctors: async (req, res) => {
     const { specialty } = req.query;
     try {
-      let query = 'SELECT doctor_id, name, email, specialization, profile_image, created_at FROM doctors';
-      const params = [];
+      const supabase = req.supabase || createSupabaseClient();
+      let query = supabase
+        .from('doctors')
+        .select('doctor_id, name, email, specialization, profile_image, created_at');
+        
       if (specialty) {
-        query += ' WHERE specialization = ?';
-        params.push(specialty);
+        query = query.eq('specialization', specialty);
       }
-      const [doctors] = await db.query(query, params);
+      
+      const { data: doctors, error } = await query;
+      
+      if (error) throw error;
       res.status(200).json({ success: true, doctors });
     } catch (error) {
       console.error('Get doctors error:', error.message);
-      res.status(500).json({ success: false, message: 'Internal server error retrieving doctors.' });
+      res.status(500).json({ success: false, message: 'Internal server error retrieving doctors.', error: error.message, stack: error.stack });
     }
   },
   
   getDoctorById: async (req, res) => {
     const { id } = req.params;
     try {
-      const [doctors] = await db.query('SELECT doctor_id, name, email, specialization, profile_image, created_at FROM doctors WHERE doctor_id = ?', [id]);
+      const supabase = req.supabase || createSupabaseClient();
+      const { data: doctors, error } = await supabase
+        .from('doctors')
+        .select('doctor_id, name, email, specialization, profile_image, created_at')
+        .eq('doctor_id', id);
+        
+      if (error) throw error;
+      
       if (!doctors || doctors.length === 0) {
         return res.status(404).json({ success: false, message: 'Doctor not found.' });
       }
@@ -181,10 +225,13 @@ const doctorController = {
     const { name, specialization, profile_image } = req.body;
     const doctorId = req.user.id;
     try {
-      await db.query(
-        'UPDATE doctors SET name = ?, specialization = ?, profile_image = ? WHERE doctor_id = ?',
-        [name, specialization, profile_image, doctorId]
-      );
+      const { error } = await req.supabase
+        .from('doctors')
+        .update({ name, specialization, profile_image })
+        .eq('doctor_id', doctorId);
+        
+      if (error) throw error;
+      
       res.status(200).json({ success: true, message: 'Doctor profile updated successfully.' });
     } catch (error) {
       console.error('Update doctor profile error:', error.message);
@@ -204,38 +251,33 @@ const patientController = {
       limit = parseInt(limit, 10) || 10;
       const offset = (page - 1) * limit;
 
-      // Base query
-      let baseQuery = "FROM patients WHERE doctor_id = ? AND (status != 'deleted' OR status IS NULL)";
-      const queryParams = [doctorId];
+      let query = req.supabase
+        .from('patients')
+        .select('*', { count: 'exact' })
+        .eq('doctor_id', doctorId)
+        .neq('status', 'deleted');
 
-      // Filters
       if (name) {
-        baseQuery += " AND name LIKE ?";
-        queryParams.push(`%${name}%`);
+        query = query.ilike('name', `%${name}%`);
       }
       if (status) {
-        baseQuery += " AND status = ?";
-        queryParams.push(status);
+        query = query.eq('status', status);
       }
 
-      // Count total records for pagination metadata
-      const [countResult] = await db.query(`SELECT COUNT(*) as total ${baseQuery}`, queryParams);
-      const totalPatients = countResult[0].total;
+      const { data: patients, count: totalPatients, error } = await query
+        .order('created_at', { ascending: false })
+        .range(offset, offset + limit - 1);
 
-      // Fetch paginated data
-      const query = `SELECT patient_id, doctor_id, name, dob, gender, phone, email, diagnosis, status, created_at ${baseQuery} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-      queryParams.push(limit, offset);
-
-      const [patients] = await db.query(query, queryParams);
+      if (error) throw error;
 
       res.status(200).json({ 
         success: true, 
         patients,
         pagination: {
-          total: totalPatients,
+          total: totalPatients || 0,
           page,
           limit,
-          totalPages: Math.ceil(totalPatients / limit)
+          totalPages: Math.ceil((totalPatients || 0) / limit)
         }
       });
     } catch (error) {
@@ -247,7 +289,13 @@ const patientController = {
   getPatientById: async (req, res) => {
     const { id } = req.params;
     try {
-      const [patients] = await db.query('SELECT patient_id, doctor_id, name, dob, gender, phone, email, diagnosis, status, created_at FROM patients WHERE patient_id = ?', [id]);
+      const { data: patients, error } = await req.supabase
+        .from('patients')
+        .select('*')
+        .eq('patient_id', id);
+        
+      if (error) throw error;
+      
       if (!patients || patients.length === 0) {
         return res.status(404).json({ success: false, message: 'Patient not found.' });
       }
@@ -271,13 +319,21 @@ const patientController = {
     const patientStatus = status || 'Active';
 
     try {
-      const [result] = await db.query(
-        'INSERT INTO patients (doctor_id, name, dob, gender, phone, email, diagnosis, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-        [doctorId, name.trim(), dob || null, gender || null, phone || null, email || null, diagnosis || null, patientStatus]
-      );
-      
-      const newPatientId = result.insertId;
-      const [newPatient] = await db.query('SELECT * FROM patients WHERE patient_id = ?', [newPatientId]);
+      const { data: newPatient, error } = await req.supabase
+        .from('patients')
+        .insert([{
+          doctor_id: doctorId,
+          name: name.trim(),
+          dob: dob || null,
+          gender: gender || null,
+          phone: phone || null,
+          email: email || null,
+          diagnosis: diagnosis || null,
+          status: patientStatus
+        }])
+        .select();
+
+      if (error) throw error;
 
       res.status(201).json({ 
         success: true, 
@@ -295,16 +351,20 @@ const patientController = {
     const doctorId = req.user.id;
     try {
       if (patient_id) {
-        await db.query(
-          'UPDATE patients SET name = ?, dob = ?, gender = ?, phone = ?, email = ?, diagnosis = ?, status = ? WHERE patient_id = ? AND doctor_id = ?',
-          [name, dob, gender, phone, email, diagnosis, status, patient_id, doctorId]
-        );
+        const { error } = await req.supabase
+          .from('patients')
+          .update({ name, dob, gender, phone, email, diagnosis, status })
+          .eq('patient_id', patient_id)
+          .eq('doctor_id', doctorId);
+          
+        if (error) throw error;
         res.status(200).json({ success: true, message: 'Patient profile updated successfully.' });
       } else {
-        await db.query(
-          'INSERT INTO patients (doctor_id, name, dob, gender, phone, email, diagnosis, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [doctorId, name, dob, gender, phone, email, diagnosis, status]
-        );
+        const { error } = await req.supabase
+          .from('patients')
+          .insert([{ doctor_id: doctorId, name, dob, gender, phone, email, diagnosis, status }]);
+          
+        if (error) throw error;
         res.status(201).json({ success: true, message: 'Patient profile created successfully.' });
       }
     } catch (error) {
@@ -323,12 +383,16 @@ const patientController = {
     }
 
     try {
-      const [result] = await db.query(
-        'UPDATE patients SET name = ?, dob = ?, gender = ?, phone = ?, email = ?, diagnosis = ?, status = ? WHERE patient_id = ? AND doctor_id = ?',
-        [name, dob, gender, phone, email, diagnosis, status, id, doctorId]
-      );
+      const { data, error } = await req.supabase
+        .from('patients')
+        .update({ name, dob, gender, phone, email, diagnosis, status })
+        .eq('patient_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
 
-      if (result.affectedRows === 0) {
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
         return res.status(404).json({ success: false, message: 'Patient not found or you do not have permission to update.' });
       }
 
@@ -344,12 +408,16 @@ const patientController = {
     const doctorId = req.user.id;
 
     try {
-      const [result] = await db.query(
-        "UPDATE patients SET status = 'deleted' WHERE patient_id = ? AND doctor_id = ?",
-        [id, doctorId]
-      );
+      const { data, error } = await req.supabase
+        .from('patients')
+        .update({ status: 'deleted' })
+        .eq('patient_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
 
-      if (result.affectedRows === 0) {
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
         return res.status(404).json({ success: false, message: 'Patient not found or you do not have permission to delete.' });
       }
 
@@ -368,29 +436,28 @@ const appointmentController = {
     const { patient_id, date, status } = req.query;
 
     try {
-      let query =
-        'SELECT appt_id, doctor_id, patient_id, date, time, type, status, notes, created_at FROM appointments WHERE doctor_id = ?';
-
-      const params = [doctorId];
+      let query = req.supabase
+        .from('appointments')
+        .select('appt_id, doctor_id, patient_id, date, time, type, status, notes, created_at')
+        .eq('doctor_id', doctorId);
 
       if (patient_id) {
-        query += ' AND patient_id = ?';
-        params.push(patient_id);
+        query = query.eq('patient_id', patient_id);
       }
 
       if (date) {
-        query += ' AND date = ?';
-        params.push(date);
+        query = query.eq('date', date);
       }
 
       if (status) {
-        query += ' AND status = ?';
-        params.push(status);
+        query = query.eq('status', status);
       }
 
-      query += ' ORDER BY date DESC, time DESC';
+      const { data: appointments, error } = await query
+        .order('date', { ascending: false })
+        .order('time', { ascending: false });
 
-      const [appointments] = await db.query(query, params);
+      if (error) throw error;
 
       res.status(200).json({
         success: true,
@@ -414,13 +481,20 @@ const appointmentController = {
     }
 
     try {
-      const [result] = await db.query(
-        'INSERT INTO appointments (doctor_id, patient_id, date, time, type, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [doctorId, patient_id, date, time, type || null, status || 'scheduled', notes || null]
-      );
-      
-      const newAppointmentId = result.insertId;
-      const [newAppointment] = await db.query('SELECT * FROM appointments WHERE appt_id = ?', [newAppointmentId]);
+      const { data: newAppointment, error } = await req.supabase
+        .from('appointments')
+        .insert([{
+          doctor_id: doctorId,
+          patient_id,
+          date,
+          time,
+          type: type || null,
+          status: status || 'scheduled',
+          notes: notes || null
+        }])
+        .select();
+
+      if (error) throw error;
 
       res.status(201).json({ 
         success: true, 
@@ -443,9 +517,11 @@ const appointmentController = {
 const sessionController = {
   getSessions: async (req, res) => {
     try {
-      const [sessions] = await db.query(
-        "SELECT * FROM session_notes"
-      );
+      const { data: sessions, error } = await req.supabase
+        .from('session_notes')
+        .select('*');
+
+      if (error) throw error;
 
       res.status(200).json({
         success: true,
@@ -461,14 +537,16 @@ const sessionController = {
 
   getSessionById: async (req, res) => {
     try {
-      const [sessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ?",
-        [req.params.id]
-      );
+      const { data: sessions, error } = await req.supabase
+        .from('session_notes')
+        .select('*')
+        .eq('note_id', req.params.id);
+
+      if (error) throw error;
 
       res.status(200).json({
         success: true,
-        session: sessions[0]
+        session: sessions && sessions.length > 0 ? sessions[0] : null
       });
     } catch (error) {
       res.status(500).json({
@@ -491,12 +569,9 @@ const sessionController = {
         ai_summary
       } = req.body;
 
-      const [result] = await db.query(
-        `INSERT INTO session_notes
-        (doctor_id, patient_id, concern, observation,
-         intervention, homework, next_plan, ai_summary)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
+      const { data, error } = await req.supabase
+        .from('session_notes')
+        .insert([{
           doctor_id,
           patient_id,
           concern,
@@ -505,12 +580,14 @@ const sessionController = {
           homework,
           next_plan,
           ai_summary
-        ]
-      );
+        }])
+        .select();
+
+      if (error) throw error;
 
       res.status(201).json({
         success: true,
-        sessionId: result.insertId
+        sessionId: data[0].note_id
       });
 
     } catch (error) {
@@ -523,7 +600,6 @@ const sessionController = {
 
   updateSession: async (req, res) => {
     try {
-
       const {
         concern,
         observation,
@@ -533,25 +609,19 @@ const sessionController = {
         ai_summary
       } = req.body;
 
-      await db.query(
-        `UPDATE session_notes
-         SET concern=?,
-             observation=?,
-             intervention=?,
-             homework=?,
-             next_plan=?,
-             ai_summary=?
-         WHERE note_id=?`,
-        [
+      const { error } = await req.supabase
+        .from('session_notes')
+        .update({
           concern,
           observation,
           intervention,
           homework,
           next_plan,
-          ai_summary,
-          req.params.id
-        ]
-      );
+          ai_summary
+        })
+        .eq('note_id', req.params.id);
+
+      if (error) throw error;
 
       res.status(200).json({
         success: true,
@@ -568,11 +638,12 @@ const sessionController = {
 
   deleteSession: async (req, res) => {
     try {
+      const { error } = await req.supabase
+        .from('session_notes')
+        .delete()
+        .eq('note_id', req.params.id);
 
-      await db.query(
-        "DELETE FROM session_notes WHERE note_id=?",
-        [req.params.id]
-      );
+      if (error) throw error;
 
       res.status(200).json({
         success: true,

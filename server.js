@@ -15,9 +15,6 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 
-// Import configuration instances
-require('./config/db');
-
 // Import extensionless modules
 const middleware = require('./middleware');
 
