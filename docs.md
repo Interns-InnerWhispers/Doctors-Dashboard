@@ -344,10 +344,15 @@ If you register a user with email confirmation enabled:
 
 ### 5.3 Patients Endpoints
 
-#### 5.3.1 Get All Patients
+#### 5.3.1 Get All Patients (List with Filters & Pagination)
 - **URL**: `GET /api/patients`
-- **Description**: Retrieves a list of all patients.
+- **Description**: Retrieves a paginated list of patients belonging to the authenticated doctor, excluding soft-deleted ones.
 - **Headers**: `Authorization: Bearer <token>`
+- **Query Parameters** (Optional):
+  - `page`: Page number (default: 1)
+  - `limit`: Number of records per page (default: 10)
+  - `name`: Filter by patient name (partial match)
+  - `status`: Filter by patient status (e.g., Active)
 - **Success Response** (`200 OK`):
   ```json
   {
@@ -365,7 +370,13 @@ If you register a user with email confirmation enabled:
         "status": "Active",
         "created_at": "2024-06-09T12:00:00.000Z"
       }
-    ]
+    ],
+    "pagination": {
+      "total": 25,
+      "page": 1,
+      "limit": 10,
+      "totalPages": 3
+    }
   }
   ```
 
