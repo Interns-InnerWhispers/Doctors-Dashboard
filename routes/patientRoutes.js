@@ -7,5 +7,6 @@ const { authMiddleware, authorize, asyncHandler } = require('../middleware');
 router.get('/', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.getPatients));
 router.get('/:id', authMiddleware, asyncHandler(patientController.getPatientById));
 router.put('/profile', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.upsertPatientProfile));
+router.put('/:id', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.updatePatientById));
 
 module.exports = router;

@@ -239,6 +239,32 @@ const patientController = {
       console.error('Upsert patient profile error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error updating patient profile.' });
     }
+  },
+  
+  updatePatientById: async (req, res) => {
+    const { id } = req.params;
+    const { name, dob, gender, phone, email, diagnosis, status } = req.body;
+    const doctorId = req.user.id;
+
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Patient name is required.' });
+    }
+
+    try {
+      const [result] = await db.query(
+        'UPDATE patients SET name = ?, dob = ?, gender = ?, phone = ?, email = ?, diagnosis = ?, status = ? WHERE patient_id = ? AND doctor_id = ?',
+        [name, dob, gender, phone, email, diagnosis, status, id, doctorId]
+      );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ success: false, message: 'Patient not found or you do not have permission to update.' });
+      }
+
+      res.status(200).json({ success: true, message: 'Patient profile updated successfully.' });
+    } catch (error) {
+      console.error('Update patient by id error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error updating patient profile.' });
+    }
   }
 };
 

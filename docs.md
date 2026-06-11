@@ -420,6 +420,32 @@ If you register a user with email confirmation enabled:
   }
   ```
 
+#### 5.3.4 Update Patient by ID
+- **URL**: `PUT /api/patients/:id`
+- **Description**: Updates the details of a specific patient. The authenticated doctor must be the owner of the patient profile.
+- **Headers**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "name": "John Doe Updated",
+    "dob": "1990-01-01",
+    "gender": "Male",
+    "phone": "555-5678",
+    "email": "john.doe@example.com",
+    "diagnosis": "Mild Hypertension - Under Control",
+    "status": "Active"
+  }
+  ```
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Patient profile updated successfully."
+  }
+  ```
+
 ---
 
 ### 5.4 Appointments Endpoints
