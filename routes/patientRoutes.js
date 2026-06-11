@@ -5,6 +5,7 @@ const { authMiddleware, authorize, asyncHandler } = require('../middleware');
 
 // Patient routes
 router.get('/', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.getPatients));
+router.post('/', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.createPatient));
 router.get('/:id', authMiddleware, asyncHandler(patientController.getPatientById));
 router.put('/profile', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.upsertPatientProfile));
 router.put('/:id', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.updatePatientById));

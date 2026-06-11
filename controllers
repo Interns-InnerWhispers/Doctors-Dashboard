@@ -218,6 +218,38 @@ const patientController = {
     }
   },
   
+  createPatient: async (req, res) => {
+    const { name, dob, gender, phone, email, diagnosis, status } = req.body;
+    const doctorId = req.user.id;
+
+    // Validation
+    if (!name || typeof name !== 'string' || name.trim() === '') {
+      return res.status(400).json({ success: false, message: 'Patient name is required and must be a valid string.' });
+    }
+    
+    // Default status if not provided
+    const patientStatus = status || 'Active';
+
+    try {
+      const [result] = await db.query(
+        'INSERT INTO patients (doctor_id, name, dob, gender, phone, email, diagnosis, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [doctorId, name.trim(), dob || null, gender || null, phone || null, email || null, diagnosis || null, patientStatus]
+      );
+      
+      const newPatientId = result.insertId;
+      const [newPatient] = await db.query('SELECT * FROM patients WHERE patient_id = ?', [newPatientId]);
+
+      res.status(201).json({ 
+        success: true, 
+        message: 'Patient created successfully.',
+        patient: newPatient[0]
+      });
+    } catch (error) {
+      console.error('Create patient error:', error.message);
+      res.status(500).json({ success: false, message: 'Internal server error creating patient.' });
+    }
+  },
+  
   upsertPatientProfile: async (req, res) => {
     const { patient_id, name, dob, gender, phone, email, diagnosis, status } = req.body;
     const doctorId = req.user.id;

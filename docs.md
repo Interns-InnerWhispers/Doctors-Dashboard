@@ -392,7 +392,46 @@ If you register a user with email confirmation enabled:
   }
   ```
 
-#### 5.3.3 Upsert Patient Profile
+#### 5.3.3 Create a Patient (with validation)
+- **URL**: `POST /api/patients`
+- **Description**: Creates a new patient linked to the authenticated doctor. Requires validation on required fields. If `status` is not provided, defaults to `'Active'`.
+- **Headers**: 
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "name": "Jane Smith",
+    "dob": "1992-03-15",
+    "gender": "Female",
+    "phone": "555-4321",
+    "email": "jane.smith@example.com",
+    "diagnosis": "Asthma",
+    "status": "Active"
+  }
+  ```
+  *(Note: `name` is strictly required. Other fields are optional).*
+- **Success Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "Patient created successfully.",
+    "patient": {
+      "patient_id": 2,
+      "doctor_id": 14,
+      "name": "Jane Smith",
+      "dob": "1992-03-15T00:00:00.000Z",
+      "gender": "Female",
+      "phone": "555-4321",
+      "email": "jane.smith@example.com",
+      "diagnosis": "Asthma",
+      "status": "Active",
+      "created_at": "2024-06-09T19:00:00.000Z"
+    }
+  }
+  ```
+
+#### 5.3.4 Upsert Patient Profile
 - **URL**: `PUT /api/patients/profile`
 - **Description**: Creates a new patient or updates an existing patient linked to the authenticated doctor. If `patient_id` is provided, it performs an update; otherwise, it creates a new record.
 - **Headers**: 
