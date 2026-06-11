@@ -8,5 +8,6 @@ router.get('/', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(pat
 router.get('/:id', authMiddleware, asyncHandler(patientController.getPatientById));
 router.put('/profile', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.upsertPatientProfile));
 router.put('/:id', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.updatePatientById));
+router.delete('/:id', authMiddleware, authorize(['doctor', 'admin']), asyncHandler(patientController.deletePatientById));
 
 module.exports = router;
