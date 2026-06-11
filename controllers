@@ -196,8 +196,48 @@ const doctorController = {
 const patientController = {
   getPatients: async (req, res) => {
     try {
-      const [patients] = await db.query("SELECT patient_id, doctor_id, name, dob, gender, phone, email, diagnosis, status, created_at FROM patients WHERE status != 'deleted' OR status IS NULL");
-      res.status(200).json({ success: true, patients });
+      const doctorId = req.user.id;
+      let { page, limit, name, status } = req.query;
+
+      // Pagination defaults
+      page = parseInt(page, 10) || 1;
+      limit = parseInt(limit, 10) || 10;
+      const offset = (page - 1) * limit;
+
+      // Base query
+      let baseQuery = "FROM patients WHERE doctor_id = ? AND (status != 'deleted' OR status IS NULL)";
+      const queryParams = [doctorId];
+
+      // Filters
+      if (name) {
+        baseQuery += " AND name LIKE ?";
+        queryParams.push(`%${name}%`);
+      }
+      if (status) {
+        baseQuery += " AND status = ?";
+        queryParams.push(status);
+      }
+
+      // Count total records for pagination metadata
+      const [countResult] = await db.query(`SELECT COUNT(*) as total ${baseQuery}`, queryParams);
+      const totalPatients = countResult[0].total;
+
+      // Fetch paginated data
+      const query = `SELECT patient_id, doctor_id, name, dob, gender, phone, email, diagnosis, status, created_at ${baseQuery} ORDER BY created_at DESC LIMIT ? OFFSET ?`;
+      queryParams.push(limit, offset);
+
+      const [patients] = await db.query(query, queryParams);
+
+      res.status(200).json({ 
+        success: true, 
+        patients,
+        pagination: {
+          total: totalPatients,
+          page,
+          limit,
+          totalPages: Math.ceil(totalPatients / limit)
+        }
+      });
     } catch (error) {
       console.error('Get patients error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error retrieving patients.' });
