@@ -294,7 +294,7 @@ const patientController = {
     const { patient_id, name, dob, gender, phone, email, diagnosis, status } = req.body;
     const doctorId = req.user.id;
     try {
-      if (patient_id) {
+      if (patient_id) { 
         await db.query(
           'UPDATE patients SET name = ?, dob = ?, gender = ?, phone = ?, email = ?, diagnosis = ?, status = ? WHERE patient_id = ? AND doctor_id = ?',
           [name, dob, gender, phone, email, diagnosis, status, patient_id, doctorId]
@@ -414,6 +414,17 @@ const appointmentController = {
     }
 
     try {
+      const [patient] = await db.query(
+  'SELECT patient_id FROM patients WHERE patient_id = ?',
+  [patient_id]
+);
+
+if (patient.length === 0) {
+  return res.status(404).json({
+    success: false,
+    message: 'Patient not found.'
+  });
+}
       const [result] = await db.query(
         'INSERT INTO appointments (doctor_id, patient_id, date, time, type, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [doctorId, patient_id, date, time, type || null, status || 'scheduled', notes || null]
