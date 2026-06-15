@@ -558,6 +558,141 @@ If you register a user with email confirmation enabled:
 
 ---
 
+### 5.5 Session Notes Endpoints
+
+#### 5.5.1 Create a Session Note
+- **URL**: `POST /api/sessions`
+- **Description**: Creates a new patient session note linked to the authenticated doctor. Validates that `patient_id` exists and is assigned to the doctor.
+- **Headers**:
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "patient_id": 1,
+    "concern": "Chest pain during heavy activity.",
+    "observation": "Blood pressure slightly elevated.",
+    "intervention": "Prescribed medication and advised rest.",
+    "homework": "Track daily blood pressure.",
+    "next_plan": "Review in two weeks.",
+    "ai_summary": "Patient exhibits cardiac exertion symptoms."
+  }
+  ```
+- **Success Response** (`201 Created`):
+  ```json
+  {
+    "success": true,
+    "message": "Session note created successfully.",
+    "session": {
+      "note_id": 1,
+      "doctor_id": 14,
+      "patient_id": 1,
+      "concern": "Chest pain during heavy activity.",
+      "observation": "Blood pressure slightly elevated.",
+      "intervention": "Prescribed medication and advised rest.",
+      "homework": "Track daily blood pressure.",
+      "next_plan": "Review in two weeks.",
+      "ai_summary": "Patient exhibits cardiac exertion symptoms.",
+      "created_at": "2026-06-15T12:57:41.000Z"
+    }
+  }
+  ```
+
+#### 5.5.2 Get All Session Notes
+- **URL**: `GET /api/sessions`
+- **Description**: Retrieves all session notes belonging to the authenticated doctor, ordered by creation date descending.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "sessions": [
+      {
+        "note_id": 1,
+        "doctor_id": 14,
+        "patient_id": 1,
+        "concern": "Chest pain during heavy activity.",
+        "observation": "Blood pressure slightly elevated.",
+        "intervention": "Prescribed medication and advised rest.",
+        "homework": "Track daily blood pressure.",
+        "next_plan": "Review in two weeks.",
+        "ai_summary": "Patient exhibits cardiac exertion symptoms.",
+        "created_at": "2026-06-15T12:57:41.000Z"
+      }
+    ]
+  }
+  ```
+
+#### 5.5.3 Get Session Note by ID
+- **URL**: `GET /api/sessions/:id`
+- **Description**: Retrieves details for a specific session note. The authenticated doctor must be the owner.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "session": {
+      "note_id": 1,
+      "doctor_id": 14,
+      "patient_id": 1,
+      "concern": "Chest pain during heavy activity.",
+      "observation": "Blood pressure slightly elevated.",
+      "intervention": "Prescribed medication and advised rest.",
+      "homework": "Track daily blood pressure.",
+      "next_plan": "Review in two weeks.",
+      "ai_summary": "Patient exhibits cardiac exertion symptoms.",
+      "created_at": "2026-06-15T12:57:41.000Z"
+    }
+  }
+  ```
+
+#### 5.5.4 Update Session Note by ID
+- **URL**: `PUT /api/sessions/:id`
+- **Description**: Updates the details of a specific session note. The authenticated doctor must be the owner of the session note.
+- **Headers**:
+  - `Authorization: Bearer <token>`
+  - `Content-Type: application/json`
+- **Request Body** (Optional fields):
+  ```json
+  {
+    "concern": "Updated concern...",
+    "observation": "Updated observation..."
+  }
+  ```
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Session note updated successfully.",
+    "session": {
+      "note_id": 1,
+      "doctor_id": 14,
+      "patient_id": 1,
+      "concern": "Updated concern...",
+      "observation": "Updated observation...",
+      "intervention": "Prescribed medication and advised rest.",
+      "homework": "Track daily blood pressure.",
+      "next_plan": "Review in two weeks.",
+      "ai_summary": "Patient exhibits cardiac exertion symptoms.",
+      "created_at": "2026-06-15T12:57:41.000Z"
+    }
+  }
+  ```
+
+#### 5.5.5 Delete Session Note by ID
+- **URL**: `DELETE /api/sessions/:id`
+- **Description**: Deletes a specific session note. The authenticated doctor must be the owner.
+- **Headers**: `Authorization: Bearer <token>`
+- **Success Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "message": "Session note deleted successfully."
+  }
+  ```
+
+---
+
 ### Error Handling
 
 All endpoints follow this standardized error response structure for failures, such as `400 Bad Request`, `401 Unauthorized`, `404 Not Found`, or `500 Internal Server Error`:
