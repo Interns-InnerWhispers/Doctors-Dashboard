@@ -1,4 +1,5 @@
-const { supabaseAdmin, createSupabaseClient } = require('./config/supabase');
+const { createClient } = require('@supabase/supabase-js');
+const { supabaseAdmin, createSupabaseClient, supabaseUrl, supabaseAnonKey } = require('./config/supabase');
 
 const authController = {
   register: async (req, res) => {
@@ -11,8 +12,13 @@ const authController = {
     }
 
     try {
-      // 1. Sign up the user in Supabase Auth
-      const { data, error } = await supabaseAdmin.auth.signUp({
+      // 1. Sign up the user in Supabase Auth using a clean client to avoid session pollution
+      const tempClient = createClient(
+        supabaseUrl || 'https://placeholder-project-url.supabase.co',
+        supabaseAnonKey || 'placeholder-anon-key',
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      const { data, error } = await tempClient.auth.signUp({
         email,
         password,
         options: {
@@ -73,8 +79,13 @@ const authController = {
     }
 
     try {
-      // 1. Sign in with Supabase Auth
-      const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+      // 1. Sign in with Supabase Auth using a clean client to avoid session pollution
+      const tempClient = createClient(
+        supabaseUrl || 'https://placeholder-project-url.supabase.co',
+        supabaseAnonKey || 'placeholder-anon-key',
+        { auth: { persistSession: false, autoRefreshToken: false } }
+      );
+      const { data, error } = await tempClient.auth.signInWithPassword({
         email,
         password
       });
@@ -516,10 +527,13 @@ const appointmentController = {
 
 const sessionController = {
   getSessions: async (req, res) => {
+    const doctorId = req.user.id;
     try {
       const { data: sessions, error } = await req.supabase
         .from('session_notes')
-        .select('*');
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
 
@@ -528,38 +542,50 @@ const sessionController = {
         sessions
       });
     } catch (error) {
+      console.error("Get sessions error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error retrieving sessions."
       });
     }
   },
 
   getSessionById: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
       const { data: sessions, error } = await req.supabase
         .from('session_notes')
         .select('*')
-        .eq('note_id', req.params.id);
+        .eq('note_id', id)
+        .eq('doctor_id', doctorId);
 
       if (error) throw error;
 
+      if (!sessions || sessions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found."
+        });
+      }
+
       res.status(200).json({
         success: true,
-        session: sessions && sessions.length > 0 ? sessions[0] : null
+        session: sessions[0]
       });
     } catch (error) {
+      console.error("Get session by id error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error retrieving session note."
       });
     }
   },
 
   createSession: async (req, res) => {
+    const doctorId = req.user.id;
     try {
       const {
-        doctor_id,
         patient_id,
         concern,
         observation,
@@ -569,36 +595,64 @@ const sessionController = {
         ai_summary
       } = req.body;
 
-      const { data, error } = await req.supabase
+      if (!patient_id) {
+        return res.status(400).json({
+          success: false,
+          message: "patient_id is required."
+        });
+      }
+
+      // Verify patient exists and belongs to the authenticated doctor
+      const { data: patients, error: patientError } = await req.supabase
+        .from('patients')
+        .select('*')
+        .eq('patient_id', patient_id)
+        .eq('doctor_id', doctorId)
+        .neq('status', 'deleted');
+
+      if (patientError) throw patientError;
+
+      if (!patients || patients.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found or does not belong to this doctor."
+        });
+      }
+
+      const { data: newSessions, error: insertError } = await req.supabase
         .from('session_notes')
         .insert([{
-          doctor_id,
+          doctor_id: doctorId,
           patient_id,
-          concern,
-          observation,
-          intervention,
-          homework,
-          next_plan,
-          ai_summary
+          concern: concern || null,
+          observation: observation || null,
+          intervention: intervention || null,
+          homework: homework || null,
+          next_plan: next_plan || null,
+          ai_summary: ai_summary || null
         }])
         .select();
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
       res.status(201).json({
         success: true,
-        sessionId: data[0].note_id
+        message: "Session note created successfully.",
+        session: newSessions[0]
       });
 
     } catch (error) {
+      console.error("Create session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error creating session note."
       });
     }
   },
 
   updateSession: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
       const {
         concern,
@@ -609,51 +663,83 @@ const sessionController = {
         ai_summary
       } = req.body;
 
-      const { error } = await req.supabase
+      // Verify session note exists and belongs to the authenticated doctor
+      const { data: sessions, error: fetchError } = await req.supabase
+        .from('session_notes')
+        .select('*')
+        .eq('note_id', id)
+        .eq('doctor_id', doctorId);
+
+      if (fetchError) throw fetchError;
+
+      if (!sessions || sessions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found or you do not have permission to update."
+        });
+      }
+
+      const { data: updatedSessions, error: updateError } = await req.supabase
         .from('session_notes')
         .update({
-          concern,
-          observation,
-          intervention,
-          homework,
-          next_plan,
-          ai_summary
+          concern: concern !== undefined ? concern : sessions[0].concern,
+          observation: observation !== undefined ? observation : sessions[0].observation,
+          intervention: intervention !== undefined ? intervention : sessions[0].intervention,
+          homework: homework !== undefined ? homework : sessions[0].homework,
+          next_plan: next_plan !== undefined ? next_plan : sessions[0].next_plan,
+          ai_summary: ai_summary !== undefined ? ai_summary : sessions[0].ai_summary
         })
-        .eq('note_id', req.params.id);
+        .eq('note_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
 
-      if (error) throw error;
+      if (updateError) throw updateError;
 
       res.status(200).json({
         success: true,
-        message: "Session updated"
+        message: "Session note updated successfully.",
+        session: updatedSessions[0]
       });
 
     } catch (error) {
+      console.error("Update session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error updating session note."
       });
     }
   },
 
   deleteSession: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
-      const { error } = await req.supabase
+      const { data: deletedSessions, error } = await req.supabase
         .from('session_notes')
         .delete()
-        .eq('note_id', req.params.id);
+        .eq('note_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
 
       if (error) throw error;
 
+      if (!deletedSessions || deletedSessions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found or you do not have permission to delete."
+        });
+      }
+
       res.status(200).json({
         success: true,
-        message: "Session deleted"
+        message: "Session note deleted successfully."
       });
 
     } catch (error) {
+      console.error("Delete session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error deleting session note."
       });
     }
   }

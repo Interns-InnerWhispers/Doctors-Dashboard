@@ -12,7 +12,13 @@ if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
 // 1. Service Role Client (Admin Operations Only - Bypasses RLS)
 const supabaseAdmin = createClient(
   supabaseUrl || 'https://placeholder-project-url.supabase.co',
-  supabaseServiceRoleKey || 'placeholder-service-role-key'
+  supabaseServiceRoleKey || 'placeholder-service-role-key',
+  {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  }
 );
 
 // 2. User-Specific Client Factory (Enforces RLS)
@@ -34,5 +40,7 @@ const createSupabaseClient = (token) => {
 
 module.exports = {
   supabaseAdmin,
-  createSupabaseClient
+  createSupabaseClient,
+  supabaseUrl,
+  supabaseAnonKey
 };
