@@ -91,3 +91,15 @@ The server will run on: `http://localhost:5000`
 | `/api/patients/:id` | `GET` | `authMiddleware` | Retrieve details for a specific patient |
 | `/api/patients/profile`| `PUT` | `authMiddleware` | Create or update a patient profile |
 | `/api/appointments` | `GET` | `authMiddleware` | List and dynamically filter appointments (by date, status, patient) |
+
+---
+
+## Active API Routes (BD-02 Scope)
+
+| Endpoint | Method | Middleware | Description |
+|---|---|---|---|
+| `/api/sessions` | `POST` | `authMiddleware` | Create patient session note |
+| `/api/sessions` | `GET` | `authMiddleware` | List all session notes for authenticated doctor |
+| `/api/sessions/:id` | `GET` | `authMiddleware` | Retrieve details for specific session note |
+| `/api/sessions/:id` | `PUT` | `authMiddleware` | Update specific session note |
+| `/api/sessions/:id` | `DELETE` | `authMiddleware` | Delete specific session note |

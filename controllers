@@ -515,9 +515,11 @@ if (patient.length === 0) {
 
 const sessionController = {
   getSessions: async (req, res) => {
+    const doctorId = req.user.id;
     try {
       const [sessions] = await db.query(
-        "SELECT * FROM session_notes"
+        "SELECT * FROM session_notes WHERE doctor_id = ? ORDER BY created_at DESC",
+        [doctorId]
       );
 
       res.status(200).json({
@@ -525,36 +527,47 @@ const sessionController = {
         sessions
       });
     } catch (error) {
+      console.error("Get sessions error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error retrieving sessions."
       });
     }
   },
 
   getSessionById: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
       const [sessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ?",
-        [req.params.id]
+        "SELECT * FROM session_notes WHERE note_id = ? AND doctor_id = ?",
+        [id, doctorId]
       );
+
+      if (!sessions || sessions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found."
+        });
+      }
 
       res.status(200).json({
         success: true,
         session: sessions[0]
       });
     } catch (error) {
+      console.error("Get session by id error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error retrieving session note."
       });
     }
   },
 
   createSession: async (req, res) => {
+    const doctorId = req.user.id;
     try {
       const {
-        doctor_id,
         patient_id,
         concern,
         observation,
@@ -564,39 +577,67 @@ const sessionController = {
         ai_summary
       } = req.body;
 
+      if (!patient_id) {
+        return res.status(400).json({
+          success: false,
+          message: "patient_id is required."
+        });
+      }
+
+      // Verify patient exists and belongs to the authenticated doctor
+      const [patients] = await db.query(
+        "SELECT * FROM patients WHERE patient_id = ? AND doctor_id = ? AND (status != 'deleted' OR status IS NULL)",
+        [patient_id, doctorId]
+      );
+
+      if (!patients || patients.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Patient not found or does not belong to this doctor."
+        });
+      }
+
       const [result] = await db.query(
         `INSERT INTO session_notes
         (doctor_id, patient_id, concern, observation,
          intervention, homework, next_plan, ai_summary)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          doctor_id,
+          doctorId,
           patient_id,
-          concern,
-          observation,
-          intervention,
-          homework,
-          next_plan,
-          ai_summary
+          concern || null,
+          observation || null,
+          intervention || null,
+          homework || null,
+          next_plan || null,
+          ai_summary || null
         ]
+      );
+
+      const [newSessions] = await db.query(
+        "SELECT * FROM session_notes WHERE note_id = ?",
+        [result.insertId]
       );
 
       res.status(201).json({
         success: true,
-        sessionId: result.insertId
+        message: "Session note created successfully.",
+        session: newSessions[0]
       });
 
     } catch (error) {
+      console.error("Create session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error creating session note."
       });
     }
   },
 
   updateSession: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
-
       const {
         concern,
         observation,
@@ -606,6 +647,19 @@ const sessionController = {
         ai_summary
       } = req.body;
 
+      // Verify session note exists and belongs to the authenticated doctor
+      const [sessions] = await db.query(
+        "SELECT * FROM session_notes WHERE note_id = ? AND doctor_id = ?",
+        [id, doctorId]
+      );
+
+      if (!sessions || sessions.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found or you do not have permission to update."
+        });
+      }
+
       await db.query(
         `UPDATE session_notes
          SET concern=?,
@@ -614,48 +668,65 @@ const sessionController = {
              homework=?,
              next_plan=?,
              ai_summary=?
-         WHERE note_id=?`,
+         WHERE note_id=? AND doctor_id=?`,
         [
-          concern,
-          observation,
-          intervention,
-          homework,
-          next_plan,
-          ai_summary,
-          req.params.id
+          concern !== undefined ? concern : sessions[0].concern,
+          observation !== undefined ? observation : sessions[0].observation,
+          intervention !== undefined ? intervention : sessions[0].intervention,
+          homework !== undefined ? homework : sessions[0].homework,
+          next_plan !== undefined ? next_plan : sessions[0].next_plan,
+          ai_summary !== undefined ? ai_summary : sessions[0].ai_summary,
+          id,
+          doctorId
         ]
+      );
+
+      const [updatedSessions] = await db.query(
+        "SELECT * FROM session_notes WHERE note_id = ?",
+        [id]
       );
 
       res.status(200).json({
         success: true,
-        message: "Session updated"
+        message: "Session note updated successfully.",
+        session: updatedSessions[0]
       });
 
     } catch (error) {
+      console.error("Update session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error updating session note."
       });
     }
   },
 
   deleteSession: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
     try {
-
-      await db.query(
-        "DELETE FROM session_notes WHERE note_id=?",
-        [req.params.id]
+      const [result] = await db.query(
+        "DELETE FROM session_notes WHERE note_id=? AND doctor_id=?",
+        [id, doctorId]
       );
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({
+          success: false,
+          message: "Session note not found or you do not have permission to delete."
+        });
+      }
 
       res.status(200).json({
         success: true,
-        message: "Session deleted"
+        message: "Session note deleted successfully."
       });
 
     } catch (error) {
+      console.error("Delete session error:", error.message);
       res.status(500).json({
         success: false,
-        message: error.message
+        message: "Internal server error deleting session note."
       });
     }
   }
