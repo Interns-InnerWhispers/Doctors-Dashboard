@@ -2,17 +2,17 @@
 
 const express = require("express");
 const router = express.Router();
-
 const { sessionController } = require("../controllers");
+const { authMiddleware, asyncHandler } = require("../middleware");
 
-router.get("/", sessionController.getSessions);
+router.get("/", authMiddleware, asyncHandler(sessionController.getSessions));
 
-router.get("/:id", sessionController.getSessionById);
+router.get("/:id", authMiddleware, asyncHandler(sessionController.getSessionById));
 
-router.post("/", sessionController.createSession);
+router.post("/", authMiddleware, asyncHandler(sessionController.createSession));
 
-router.put("/:id", sessionController.updateSession);
+router.put("/:id", authMiddleware, asyncHandler(sessionController.updateSession));
 
-router.delete("/:id", sessionController.deleteSession);
+router.delete("/:id", authMiddleware, asyncHandler(sessionController.deleteSession));
 
 module.exports = router;
