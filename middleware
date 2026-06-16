@@ -1,4 +1,4 @@
-const { supabaseAdmin, createSupabaseClient } = require('./config/supabase');
+const { supabaseAdmin, createSupabaseClient, verifyJWTLocally } = require('./config/supabase');
 
 // JWT verification middleware (BD-01) - Supabase implementation
 const authMiddleware = async (req, res, next) => {
@@ -13,9 +13,25 @@ const authMiddleware = async (req, res, next) => {
   const token = authHeader.split(' ')[1];
 
   try {
-    // 1. Verify the JWT token using Supabase Admin
-    const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
-    if (error || !user) {
+    let user = null;
+    let authError = null;
+
+    // 1. Attempt to verify JWT token locally using cached JWKS public keys
+    const localResult = await verifyJWTLocally(token);
+    if (!localResult.error && localResult.user) {
+      user = localResult.user;
+    } else {
+      // Fallback to calling remote Supabase Auth server if local validation fails
+      console.log('Local JWT verification failed or bypassed. Falling back to remote Supabase auth. Reason:', localResult.error ? localResult.error.message : 'Unknown');
+      const { data, error } = await supabaseAdmin.auth.getUser(token);
+      if (error || !data || !data.user) {
+        authError = error || new Error('Invalid or expired authentication token.');
+      } else {
+        user = data.user;
+      }
+    }
+
+    if (authError || !user) {
       return res.status(401).json({
         success: false,
         message: 'Access Denied: Invalid or expired authentication token.'
