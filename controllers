@@ -516,7 +516,33 @@ if (patient.length === 0) {
 const sessionController = {
   getSessions: async (req, res) => {
     const doctorId = req.user.id;
+    const { patient_id } = req.query;
     try {
+      if (patient_id) {
+        // Verify patient exists and belongs to the authenticated doctor
+        const [patients] = await db.query(
+          "SELECT * FROM patients WHERE patient_id = ? AND doctor_id = ? AND (status != 'deleted' OR status IS NULL)",
+          [patient_id, doctorId]
+        );
+
+        if (!patients || patients.length === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Patient not found or does not belong to this doctor."
+          });
+        }
+
+        const [sessions] = await db.query(
+          "SELECT * FROM session_notes WHERE doctor_id = ? AND patient_id = ? ORDER BY created_at DESC",
+          [doctorId, patient_id]
+        );
+
+        return res.status(200).json({
+          success: true,
+          sessions
+        });
+      }
+
       const [sessions] = await db.query(
         "SELECT * FROM session_notes WHERE doctor_id = ? ORDER BY created_at DESC",
         [doctorId]

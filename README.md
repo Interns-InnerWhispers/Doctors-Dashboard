@@ -99,7 +99,7 @@ The server will run on: `http://localhost:5000`
 | Endpoint | Method | Middleware | Description |
 |---|---|---|---|
 | `/api/sessions` | `POST` | `authMiddleware` | Create patient session note |
-| `/api/sessions` | `GET` | `authMiddleware` | List all session notes for authenticated doctor |
+| `/api/sessions` | `GET` | `authMiddleware` | List all session notes or filter by patient_id with history |
 | `/api/sessions/:id` | `GET` | `authMiddleware` | Retrieve details for specific session note |
 | `/api/sessions/:id` | `PUT` | `authMiddleware` | Update specific session note |
 | `/api/sessions/:id` | `DELETE` | `authMiddleware` | Delete specific session note |

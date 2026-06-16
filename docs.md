@@ -622,10 +622,13 @@ If you register a user with email confirmation enabled:
   }
   ```
 
-#### 5.5.2 Get All Session Notes
+#### 5.5.2 Get Session Notes (List with Optional Patient History Filter)
 - **URL**: `GET /api/sessions`
-- **Description**: Retrieves all session notes belonging to the authenticated doctor, ordered by creation date descending.
+- **Description**: Retrieves all session notes belonging to the authenticated doctor, ordered by creation date descending. Supports filtering by patient to retrieve a specific patient's session history.
 - **Headers**: `Authorization: Bearer <token>`
+- **Query Parameters**:
+  - `patient_id` (Optional): Filter session notes for a specific patient. Must exist and belong to the authenticated doctor.
+    - *Example*: `?patient_id=3`
 - **Success Response** (`200 OK`):
   ```json
   {
