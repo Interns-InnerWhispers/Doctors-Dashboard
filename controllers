@@ -528,7 +528,41 @@ const appointmentController = {
 const sessionController = {
   getSessions: async (req, res) => {
     const doctorId = req.user.id;
+    const { patient_id } = req.query;
     try {
+      if (patient_id) {
+        // Verify patient exists and belongs to the authenticated doctor
+        const { data: patients, error: patientError } = await req.supabase
+          .from('patients')
+          .select('*')
+          .eq('patient_id', patient_id)
+          .eq('doctor_id', doctorId)
+          .neq('status', 'deleted');
+
+        if (patientError) throw patientError;
+
+        if (!patients || patients.length === 0) {
+          return res.status(404).json({
+            success: false,
+            message: "Patient not found or does not belong to this doctor."
+          });
+        }
+
+        const { data: sessions, error: sessionError } = await req.supabase
+          .from('session_notes')
+          .select('*')
+          .eq('doctor_id', doctorId)
+          .eq('patient_id', patient_id)
+          .order('created_at', { ascending: false });
+
+        if (sessionError) throw sessionError;
+
+        return res.status(200).json({
+          success: true,
+          sessions
+        });
+      }
+
       const { data: sessions, error } = await req.supabase
         .from('session_notes')
         .select('*')
