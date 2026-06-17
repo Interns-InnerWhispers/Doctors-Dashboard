@@ -764,16 +764,81 @@ const sessionController = {
 
 const reportController = {
   getReports: async (req, res) => {
-    res.status(200).json({ message: "Get all reports" });
-  },
+  try {
+    const { data, error } = await supabase
+      .from('reports')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(200).json({
+      success: true,
+      reports: data
+    });
+
+  } catch (error) {
+    console.error('Get reports error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch reports'
+    });
+  }
+},
 
   getReportById: async (req, res) => {
     res.status(200).json({ message: "Get report by ID" });
   },
 
   createReport: async (req, res) => {
-    res.status(201).json({ message: "Create report" });
-  },
+  const {
+    doctor_id,
+    patient_id,
+    report_title,
+    report_content,
+    ai_draft,
+    pdf_url,
+    status
+  } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('reports')
+      .insert([
+        {
+          doctor_id,
+          patient_id,
+          report_title,
+          report_content,
+          ai_draft,
+          pdf_url,
+          status: status || 'draft'
+        }
+      ])
+      .select();
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Report created successfully',
+      report: data[0]
+    });
+
+  } catch (error) {
+    console.error('Create report error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create report'
+    });
+  }
+},
 
   updateReport: async (req, res) => {
     res.status(200).json({ message: "Update report" });
