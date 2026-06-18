@@ -12,12 +12,14 @@ router.get('/:id');
 // CREATE report
 router.post(
   '/',
-  middleware.authMiddleware,
-  reportController.createReport
+  middleware.authMiddleware, reportController.createReport
 );
 
 // UPDATE report
-router.put('/:id');
+router.put(
+  '/:id',
+  middleware.authMiddleware, reportController.updateReport
+);
 
 // DELETE report
 router.delete('/:id');
