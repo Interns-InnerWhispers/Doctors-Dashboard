@@ -764,11 +764,18 @@ const sessionController = {
 
 const reportController = {
   getReports: async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+
+  const start = (page - 1) * limit;
+  const end = start + limit - 1;
+
   try {
-    const { data, error } = await supabase
+    const { data, error, count } = await supabase
       .from('reports')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(start, end);
 
     if (error) {
       throw error;
@@ -776,6 +783,9 @@ const reportController = {
 
     res.status(200).json({
       success: true,
+      page,
+      limit,
+      total: count,
       reports: data
     });
 
