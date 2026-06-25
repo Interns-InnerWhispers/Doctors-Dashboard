@@ -1,5 +1,7 @@
 const supabase = require('./config/supabase');
 const db = require('./config/db');
+const cloudinary = require('./config/cloudinary');
+const streamifier = require('streamifier');
 
 const authController = {
   register: async (req, res) => {
@@ -913,9 +915,60 @@ const documentController = {
   },
 
   uploadDocument: async (req, res) => {
-    res.status(201).json({ message: "Upload document" });
-  },
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No file uploaded"
+      });
+    }
 
+    const { patient_id } = req.body;
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          folder: "doctor_documents"
+        },
+        (error, result) => {
+          if (error) return reject(error);
+          resolve(result);
+        }
+      );
+
+      streamifier
+        .createReadStream(req.file.buffer)
+        .pipe(uploadStream);
+    });
+
+    const { data, error } = await supabase
+      .from("documents")
+      .insert([
+        {
+          patient_id,
+          file_name: req.file.originalname,
+          file_path: uploadResult.secure_url
+        }
+      ])
+      .select();
+
+    if (error) throw error;
+
+    res.status(201).json({
+      success: true,
+      message: "Document uploaded successfully",
+      document: data[0]
+    });
+
+  } catch (error) {
+    console.error("Upload document error:", error.message);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to upload document"
+    });
+  }
+},
   updateDocument: async (req, res) => {
     res.status(200).json({ message: "Update document" });
   },

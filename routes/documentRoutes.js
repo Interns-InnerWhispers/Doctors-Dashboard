@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const upload = require("../services/uploadMiddleware");
 
 const middleware = require("../middleware");
 const { documentController } = require("../controllers");
@@ -22,6 +23,7 @@ router.get(
 router.post(
   "/",
   middleware.authMiddleware,
+  upload.single("file"),
   documentController.uploadDocument
 );
 
