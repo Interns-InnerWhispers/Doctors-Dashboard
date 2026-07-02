@@ -535,9 +535,24 @@ const sessionController = {
         }
 
         const [sessions] = await db.query(
-          "SELECT * FROM session_notes WHERE doctor_id = ? AND patient_id = ? ORDER BY created_at DESC",
-          [doctorId, patient_id]
-        );
+         `
+         SELECT
+          note_id,
+          doctor_id,
+          patient_id,
+          concern,
+          observation,
+          intervention,
+          homework,
+          next_plan,
+          ai_summary,
+          created_at
+        FROM session_notes
+        WHERE doctor_id = ? AND patient_id = ?
+        ORDER BY created_at DESC
+        `,
+        [doctorId, patient_id]
+      );
 
         return res.status(200).json({
           success: true,
@@ -546,9 +561,24 @@ const sessionController = {
       }
 
       const [sessions] = await db.query(
-        "SELECT * FROM session_notes WHERE doctor_id = ? ORDER BY created_at DESC",
-        [doctorId]
-      );
+        `
+        SELECT
+        note_id,
+        doctor_id,
+        patient_id,
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary,
+        created_at
+      FROM session_notes
+      WHERE doctor_id = ?
+      ORDER BY created_at DESC
+      `,
+      [doctorId]
+    );
 
       res.status(200).json({
         success: true,
@@ -568,7 +598,20 @@ const sessionController = {
     const { id } = req.params;
     try {
       const [sessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ? AND doctor_id = ?",
+        `SELECT
+        note_id,
+        doctor_id,
+        patient_id,
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary,
+        created_at
+      FROM session_notes
+      WHERE note_id = ? AND doctor_id = ?
+      `,
         [id, doctorId]
       );
 
@@ -643,7 +686,20 @@ const sessionController = {
       );
 
       const [newSessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ?",
+        `SELECT
+        note_id,
+        doctor_id,
+        patient_id,
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary,
+        created_at
+      FROM session_notes
+      WHERE note_id = ?
+      `,
         [result.insertId]
       );
 
@@ -677,7 +733,21 @@ const sessionController = {
 
       // Verify session note exists and belongs to the authenticated doctor
       const [sessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ? AND doctor_id = ?",
+        `
+        SELECT
+         note_id,
+         doctor_id,
+         patient_id,
+         concern,
+         observation,
+         intervention,
+         homework,
+         next_plan,
+         ai_summary,
+         created_at
+        FROM session_notes
+        WHERE note_id = ? AND doctor_id = ?
+        `,
         [id, doctorId]
       );
 
@@ -710,9 +780,23 @@ const sessionController = {
       );
 
       const [updatedSessions] = await db.query(
-        "SELECT * FROM session_notes WHERE note_id = ?",
-        [id]
-      );
+      `
+      SELECT
+        note_id,
+        doctor_id,
+        patient_id,
+        concern,
+        observation,
+        intervention,
+        homework,
+        next_plan,
+        ai_summary,
+        created_at
+      FROM session_notes
+      WHERE note_id = ?
+      `,
+      [id]
+    );
 
       res.status(200).json({
         success: true,
@@ -775,7 +859,18 @@ const reportController = {
   try {
     const { data, error, count } = await supabase
       .from('reports')
-      .select('*', { count: 'exact' })
+      .select(
+        `
+        report_id,
+        doctor_id,
+        patient_id,
+        report_title,
+        status,
+        created_at,
+        pdf_url
+        `,
+        { count: 'exact' }
+      )
       .order('created_at', { ascending: false })
       .range(start, end);
 
@@ -904,7 +999,6 @@ const reportController = {
     });
   }
 },
-
 
   updateReport: async (req, res) => {
     const { id } = req.params;
