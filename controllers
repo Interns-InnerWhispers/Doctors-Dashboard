@@ -1,5 +1,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { supabaseAdmin, createSupabaseClient, supabaseUrl, supabaseAnonKey } = require('./config/supabase');
+const cloudinary = require('./config/cloudinary');
+const streamifier = require('streamifier');
 
 const authController = {
   register: async (req, res) => {
@@ -516,6 +518,49 @@ const appointmentController = {
       console.error('Create appointment error:', error.message);
       res.status(500).json({ success: false, message: 'Internal server error creating appointment.' });
     }
+  },
+
+  updateAppointment: async (req, res) => {
+    const doctorId = req.user.id;
+    const { id } = req.params;
+    const { patient_id, date, time, type, status, notes } = req.body;
+
+    try {
+      const { data, error } = await req.supabase
+        .from('appointments')
+        .update({
+          patient_id,
+          date,
+          time,
+          type,
+          status,
+          notes
+        })
+        .eq('appt_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Appointment not found.'
+        });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Appointment updated successfully.',
+        appointment: data[0]
+      });
+    } catch (error) {
+      console.error('Update appointment error:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Internal server error updating appointment.'
+      });
+    }
   }
 };
 
@@ -785,23 +830,164 @@ const sessionController = {
 
 const reportController = {
   getReports: async (req, res) => {
-    res.status(200).json({ message: "Get all reports" });
+    const doctorId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const start = (page - 1) * limit;
+    const end = start + limit - 1;
+
+    try {
+      const { data, error, count } = await req.supabase
+        .from('reports')
+        .select(
+          'report_id, doctor_id, patient_id, report_title, status, created_at, pdf_url',
+          { count: 'exact' }
+        )
+        .eq('doctor_id', doctorId)
+        .order('created_at', { ascending: false })
+        .range(start, end);
+
+      if (error) throw error;
+
+      res.status(200).json({
+        success: true,
+        page,
+        limit,
+        total: count,
+        reports: data
+      });
+    } catch (error) {
+      console.error('Get reports error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to fetch reports.' });
+    }
   },
 
   getReportById: async (req, res) => {
-    res.status(200).json({ message: "Get report by ID" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   },
 
   createReport: async (req, res) => {
-    res.status(201).json({ message: "Create report" });
+    const doctorId = req.user.id;
+    const { patient_id, report_title, report_content, ai_draft, pdf_url, status } = req.body;
+
+    if (!patient_id || !report_title) {
+      return res.status(400).json({ success: false, message: 'patient_id and report_title are required.' });
+    }
+
+    try {
+      const { data, error } = await req.supabase
+        .from('reports')
+        .insert([{
+          doctor_id: doctorId,
+          patient_id,
+          report_title,
+          report_content: report_content || null,
+          ai_draft: ai_draft || null,
+          pdf_url: pdf_url || null,
+          status: status || 'draft'
+        }])
+        .select();
+
+      if (error) throw error;
+
+      res.status(201).json({
+        success: true,
+        message: 'Report created successfully.',
+        report: data[0]
+      });
+    } catch (error) {
+      console.error('Create report error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to create report.' });
+    }
+  },
+
+  uploadReport: async (req, res) => {
+    const doctorId = req.user.id;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.' });
+      }
+
+      const { report_id } = req.body;
+      if (!report_id) {
+        return res.status(400).json({ success: false, message: 'report_id is required.' });
+      }
+
+      // Verify report belongs to this doctor
+      const { data: existing, error: fetchError } = await req.supabase
+        .from('reports')
+        .select('report_id')
+        .eq('report_id', report_id)
+        .eq('doctor_id', doctorId);
+
+      if (fetchError) throw fetchError;
+      if (!existing || existing.length === 0) {
+        return res.status(404).json({ success: false, message: 'Report not found or you do not have permission.' });
+      }
+
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: 'doctor_reports' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+
+      const { data, error } = await req.supabase
+        .from('reports')
+        .update({ pdf_url: uploadResult.secure_url })
+        .eq('report_id', report_id)
+        .eq('doctor_id', doctorId)
+        .select();
+
+      if (error) throw error;
+
+      res.status(200).json({
+        success: true,
+        message: 'Report uploaded successfully.',
+        report: data[0]
+      });
+    } catch (error) {
+      console.error('Upload report error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to upload report.' });
+    }
   },
 
   updateReport: async (req, res) => {
-    res.status(200).json({ message: "Update report" });
+    const doctorId = req.user.id;
+    const { id } = req.params;
+    const { report_title, report_content, ai_draft, pdf_url, status } = req.body;
+
+    try {
+      const { data, error } = await req.supabase
+        .from('reports')
+        .update({ report_title, report_content, ai_draft, pdf_url, status })
+        .eq('report_id', id)
+        .eq('doctor_id', doctorId)
+        .select();
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return res.status(404).json({ success: false, message: 'Report not found or you do not have permission.' });
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Report updated successfully.',
+        report: data[0]
+      });
+    } catch (error) {
+      console.error('Update report error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to update report.' });
+    }
   },
 
   deleteReport: async (req, res) => {
-    res.status(200).json({ message: "Delete report" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   }
 };
 
@@ -811,23 +997,77 @@ const reportController = {
 
 const documentController = {
   getDocuments: async (req, res) => {
-    res.status(200).json({ message: "Get all documents" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   },
 
   getDocumentById: async (req, res) => {
-    res.status(200).json({ message: "Get document by ID" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   },
 
   uploadDocument: async (req, res) => {
-    res.status(201).json({ message: "Upload document" });
+    const doctorId = req.user.id;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded.' });
+      }
+
+      const { patient_id } = req.body;
+      if (!patient_id) {
+        return res.status(400).json({ success: false, message: 'patient_id is required.' });
+      }
+
+      // Verify patient belongs to this doctor
+      const { data: patients, error: patientError } = await req.supabase
+        .from('patients')
+        .select('patient_id')
+        .eq('patient_id', patient_id)
+        .eq('doctor_id', doctorId)
+        .neq('status', 'deleted');
+
+      if (patientError) throw patientError;
+      if (!patients || patients.length === 0) {
+        return res.status(404).json({ success: false, message: 'Patient not found or does not belong to this doctor.' });
+      }
+
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          { folder: 'doctor_documents' },
+          (error, result) => {
+            if (error) return reject(error);
+            resolve(result);
+          }
+        );
+        streamifier.createReadStream(req.file.buffer).pipe(uploadStream);
+      });
+
+      const { data, error } = await req.supabase
+        .from('documents')
+        .insert([{
+          patient_id,
+          file_name: req.file.originalname,
+          file_path: uploadResult.secure_url
+        }])
+        .select();
+
+      if (error) throw error;
+
+      res.status(201).json({
+        success: true,
+        message: 'Document uploaded successfully.',
+        document: data[0]
+      });
+    } catch (error) {
+      console.error('Upload document error:', error.message);
+      res.status(500).json({ success: false, message: 'Failed to upload document.' });
+    }
   },
 
   updateDocument: async (req, res) => {
-    res.status(200).json({ message: "Update document" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   },
 
   deleteDocument: async (req, res) => {
-    res.status(200).json({ message: "Delete document" });
+    res.status(501).json({ success: false, message: 'Not implemented.' });
   }
 };
 

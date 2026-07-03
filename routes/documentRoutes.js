@@ -1,19 +1,27 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
+const middleware = require('../middleware');
+const { documentController } = require('../controllers');
+const upload = require('../services/uploadMiddleware');
 
 // GET all documents
-router.get("/");
+router.get('/', middleware.authMiddleware, documentController.getDocuments);
 
 // GET document by ID
-router.get("/:id");
+router.get('/:id', middleware.authMiddleware, documentController.getDocumentById);
 
 // UPLOAD document
-router.post("/");
+router.post(
+  '/',
+  middleware.authMiddleware,
+  upload.single('file'),
+  documentController.uploadDocument
+);
 
 // UPDATE document
-router.put("/:id");
+router.put('/:id', middleware.authMiddleware, documentController.updateDocument);
 
 // DELETE document
-router.delete("/:id");
+router.delete('/:id', middleware.authMiddleware, documentController.deleteDocument);
 
 module.exports = router;

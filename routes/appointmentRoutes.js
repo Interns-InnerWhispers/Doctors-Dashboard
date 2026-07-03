@@ -9,4 +9,7 @@ router.get('/', middleware.authMiddleware, appointmentController.getAppointments
 // POST /api/appointments - create appointment
 router.post('/', middleware.authMiddleware, appointmentController.createAppointment);
 
+// PUT /api/appointments/:id - update appointment
+router.put('/:id', middleware.authMiddleware, appointmentController.updateAppointment);
+
 module.exports = router;

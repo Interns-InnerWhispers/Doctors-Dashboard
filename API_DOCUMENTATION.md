@@ -297,7 +297,6 @@ Delete document.
 
 - Node.js
 - Express.js
-- MySQL
-- Supabase
+- Supabase (PostgreSQL)
 - Cloudinary
 - Multer
